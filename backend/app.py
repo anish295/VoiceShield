@@ -707,10 +707,10 @@ def initialize_audio():
         return True
 
     except ImportError:
-        logger.error("PyAudio not available. Install with: pip install pyaudio")
+        logger.warning("PyAudio not available - running without audio processing")
         return False
     except Exception as e:
-        logger.error(f"Audio initialization failed: {e}")
+        logger.warning(f"Audio initialization failed: {e} - running without audio")
         return False
 
 def audio_processing_thread():
@@ -932,6 +932,7 @@ def video_feed():
 def get_status():
     """Get system status including audio."""
     return jsonify({
+        'status': 'healthy',
         'camera_active': camera_manager.is_active,
         'face_detection_ready': face_cascade is not None,
         'audio_active': audio_stream is not None and audio_stream.get('active', False),
@@ -941,7 +942,17 @@ def get_status():
             'enabled': anger_alert_enabled,
             'threshold': anger_alert_threshold,
             'cooldown': anger_alert_cooldown
-        }
+        },
+        'deployment': 'render',
+        'version': '1.0.0'
+    })
+
+@app.route('/health')
+def health_check():
+    """Simple health check endpoint for monitoring."""
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': float(time.time())
     })
 
 @app.route('/api/start', methods=['POST'])
@@ -1075,14 +1086,21 @@ def handle_disconnect():
     logger.info("Client disconnected")
 
 if __name__ == '__main__':
+    import os
+
     print("🚀 Starting WORKING VoiceShield Flask Application")
     print("=" * 60)
     print("📹 Real face detection with OpenCV")
     print("🎭 Actual emotion analysis with DeepFace")
     print("✅ Visual face rectangles and emotion overlay")
     print("⚡ This version actually works!")
-    print("🌐 Access at: http://localhost:5001")
+
+    # Get port from environment variable (for Render deployment)
+    port = int(os.environ.get('PORT', 5001))
+    host = os.environ.get('HOST', '0.0.0.0')
+
+    print(f"🌐 Access at: http://{host}:{port}")
     print("=" * 60)
-    
+
     # Run the Flask app with SocketIO
-    socketio.run(app, host='0.0.0.0', port=5001, debug=False)
+    socketio.run(app, host=host, port=port, debug=False)

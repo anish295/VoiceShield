@@ -9,3 +9,4 @@ eventlet==0.33.3
 gunicorn==21.2.0
 tensorflow-cpu==2.13.0
 Pillow==10.0.0
+Werkzeug==2.3.7
