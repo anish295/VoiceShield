@@ -23,6 +23,8 @@ import threading
 import logging
 import json
 import yaml
+import base64
+from io import BytesIO
 
 # Initialize Flask app with updated template and static folders
 app = Flask(__name__,
@@ -47,58 +49,54 @@ current_emotions = {
     'overall': []
 }
 
+def decode_base64_image(base64_string):
+    """Decode Base64 image data from frontend into OpenCV format."""
+    try:
+        # Remove the data URL prefix if present
+        if base64_string.startswith('data:image'):
+            base64_string = base64_string.split(',')[1]
+
+        # Decode Base64 to bytes
+        image_bytes = base64.b64decode(base64_string)
+
+        # Convert bytes to numpy array
+        nparr = np.frombuffer(image_bytes, np.uint8)
+
+        # Decode image using OpenCV
+        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+        if frame is None:
+            raise ValueError("Failed to decode image")
+
+        return frame
+
+    except Exception as e:
+        logger.error(f"Base64 image decoding failed: {e}")
+        return None
+
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class WorkingCameraManager:
-    """Working camera manager that actually detects faces."""
-    
-    def __init__(self):
-        self.camera = None
-        self.is_active = False
-        self.last_voice_emotion = 'neutral'  # Initialize for stability
-        
-    def initialize(self):
-        """Initialize camera with working settings."""
-        try:
-            self.camera = cv2.VideoCapture(0)
-            if not self.camera.isOpened():
-                raise Exception("Cannot access camera")
-                
-            # Set camera parameters for better detection
-            self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-            self.camera.set(cv2.CAP_PROP_FPS, 30)
-            self.camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-            
-            self.is_active = True
-            logger.info("Camera initialized: 640x480 @ 30fps")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Camera initialization failed: {e}")
-            return False
-    
-    def get_frame(self):
-        """Get current camera frame."""
-        if not self.is_active or not self.camera:
-            return None
-            
-        ret, frame = self.camera.read()
-        if ret:
-            return cv2.flip(frame, 1)  # Mirror image
-        return None
-    
-    def release(self):
-        """Release camera resources."""
-        if self.camera:
-            self.camera.release()
-            self.is_active = False
-            logger.info("Camera released")
+# Camera is now handled by client - we just track state
+class SystemState:
+    """Track system state for client-server architecture."""
 
-# Global camera manager
-camera_manager = WorkingCameraManager()
+    def __init__(self):
+        self.camera_active = False
+        self.last_voice_emotion = 'neutral'
+        self.last_voice_confidence = 0.5
+
+    def set_camera_active(self, active):
+        """Set camera active state."""
+        self.camera_active = active
+        if active:
+            logger.info("Client camera stream active")
+        else:
+            logger.info("Client camera stream inactive")
+
+# Global system state
+system_state = SystemState()
 
 def initialize_face_detection():
     """Initialize face detection cascade."""
@@ -514,9 +512,8 @@ def detect_voice_emotions():
             emotion_scores['neutral'] += 0.2
 
         # Add stability factor - reduce rapid switching
-        if hasattr(camera_manager, 'last_voice_emotion'):
-            if camera_manager.last_voice_emotion in emotion_scores:
-                emotion_scores[camera_manager.last_voice_emotion] += 0.1  # Small bonus for consistency
+        if system_state.last_voice_emotion in emotion_scores:
+            emotion_scores[system_state.last_voice_emotion] += 0.1  # Small bonus for consistency
 
         # Find dominant emotion with stability and better confidence calculation
         sorted_emotions = sorted(emotion_scores.items(), key=lambda x: x[1], reverse=True)
@@ -526,9 +523,9 @@ def detect_voice_emotions():
 
         # Only change emotion if there's a significant difference (reduces oscillation)
         score_difference = max_score - second_score
-        if score_difference < 0.15 and hasattr(camera_manager, 'last_voice_emotion'):
+        if score_difference < 0.15:
             # If scores are close, stick with previous emotion for stability
-            emotion = camera_manager.last_voice_emotion
+            emotion = system_state.last_voice_emotion
             confidence = min(0.7, 0.3 + (score_difference * 0.5))
         else:
             # Clear winner - use new emotion
@@ -545,8 +542,8 @@ def detect_voice_emotions():
         confidence = max(0.3, confidence)  # Minimum confidence
 
         # Store for next iteration
-        camera_manager.last_voice_emotion = emotion
-        camera_manager.last_voice_confidence = confidence
+        system_state.last_voice_emotion = emotion
+        system_state.last_voice_confidence = confidence
 
         logger.debug(f"Voice emotion detected: {emotion} ({confidence:.2f})")
         return [{
@@ -847,98 +844,21 @@ def trigger_anger_alert(anger_level, emotion_data):
     except Exception as e:
         logger.error(f"Error triggering anger alert: {e}")
 
-def process_emotions_realtime():
-    """Real-time emotion processing that actually works."""
-    global is_running, current_emotions
-    
-    while is_running:
-        try:
-            # Get current frame
-            frame = camera_manager.get_frame()
-            if frame is None:
-                time.sleep(0.1)
-                continue
-            
-            # Detect faces and emotions
-            facial_emotions = detect_faces_and_emotions(frame)
-            
-            # Detect voice emotions (only if audio is available and active)
-            voice_emotions = detect_voice_emotions() if audio_stream and audio_stream.get('active') else []
-            
-            # Get the current voice emotion (single emotion, not list)
-            current_voice_emotion = None
-            if hasattr(camera_manager, 'last_voice_emotion') and camera_manager.last_voice_emotion:
-                current_voice_emotion = {
-                    'emotion': camera_manager.last_voice_emotion,
-                    'confidence': getattr(camera_manager, 'last_voice_confidence', 0.5)
-                }
-
-            # Combine emotions with facial priority
-            overall_emotion = combine_emotions_with_facial_priority(facial_emotions, current_voice_emotion)
-
-            # Update global emotions
-            current_emotions['facial'] = facial_emotions
-            current_emotions['voice'] = voice_emotions
-            current_emotions['overall'] = overall_emotion  # Single combined emotion
-            current_emotions['timestamp'] = float(time.time())
-
-            # Check for anger alert on facial emotion
-            check_anger_alert(facial_emotions)
-
-            # Emit to all connected clients
-            socketio.emit('emotion_update', current_emotions)
-            
-            # Process at 5 FPS for emotions (good balance)
-            time.sleep(0.2)
-            
-        except Exception as e:
-            logger.error(f"Emotion processing error: {e}")
-            time.sleep(0.1)
+# process_emotions_realtime is no longer needed - frames are processed via Socket.IO
 
 @app.route('/')
 def index():
     """Main page."""
     return render_template('index.html')
 
-@app.route('/video_feed')
-def video_feed():
-    """Video streaming route with face detection overlay."""
-    def generate_frames():
-        while True:
-            frame = camera_manager.get_frame()
-            if frame is None:
-                continue
-            
-            # Draw face rectangles and emotions
-            if current_emotions['facial']:
-                for emotion in current_emotions['facial']:
-                    x, y, w, h = emotion['bbox']
-                    
-                    # Draw green rectangle around face
-                    cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-                    
-                    # Draw emotion text
-                    emotion_text = f"{emotion['emotion']} ({emotion['confidence']:.2f})"
-                    cv2.putText(frame, emotion_text, (x, y-10), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-                
-            # Encode frame as JPEG
-            ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
-            if ret:
-                frame_bytes = buffer.tobytes()
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-            
-            time.sleep(1/30)  # 30 FPS
-    
-    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+# video_feed route removed - video is now handled client-side
 
 @app.route('/api/status')
 def get_status():
     """Get system status including audio."""
     return jsonify({
         'status': 'healthy',
-        'camera_active': camera_manager.is_active,
+        'camera_active': system_state.camera_active,
         'face_detection_ready': face_cascade is not None,
         'audio_active': audio_stream is not None and audio_stream.get('active', False),
         'system_running': is_running,
@@ -962,27 +882,18 @@ def health_check():
 
 @app.route('/api/start', methods=['POST'])
 def start_system():
-    """Start the emotion detection system directly without complex permissions."""
+    """Start the emotion detection system for client-server architecture."""
     global is_running, audio_thread
 
     try:
-        logger.info("Starting VoiceShield system...")
+        logger.info("Starting VoiceShield backend system...")
 
         # Initialize face detection
         if not initialize_face_detection():
             return jsonify({'success': False, 'error': 'Face detection initialization failed'})
 
-        # Initialize camera with retry logic
-        camera_success = False
-        for attempt in range(3):
-            logger.info(f"Camera initialization attempt {attempt + 1}/3")
-            if camera_manager.initialize():
-                camera_success = True
-                break
-            time.sleep(1)  # Wait 1 second between attempts
-
-        if not camera_success:
-            return jsonify({'success': False, 'error': 'Camera initialization failed after 3 attempts. Please check if camera is available.'})
+        # Camera is now handled by client - just mark as ready
+        system_state.set_camera_active(True)
 
         # Initialize audio (optional - system works without it)
         audio_success = initialize_audio()
@@ -991,18 +902,13 @@ def start_system():
 
         is_running = True
 
-        # Start emotion processing thread
-        emotion_thread = threading.Thread(target=process_emotions_realtime, daemon=True)
-        emotion_thread.start()
-        logger.info("Emotion processing thread started")
-
         # Start audio processing thread if audio is available
         if audio_stream and audio_stream.get('active'):
             audio_thread = threading.Thread(target=audio_processing_thread, daemon=True)
             audio_thread.start()
             logger.info("Audio processing thread started")
 
-        logger.info("Working VoiceShield system started successfully")
+        logger.info("VoiceShield backend system started successfully")
         return jsonify({
             'success': True,
             'message': 'System started successfully',
@@ -1021,13 +927,13 @@ def stop_system():
 
     try:
         is_running = False
-        camera_manager.release()
+        system_state.set_camera_active(False)
         cleanup_audio()
 
         # Clear emotions
         current_emotions = {'facial': [], 'voice': [], 'overall': []}
 
-        logger.info("Working VoiceShield system stopped")
+        logger.info("VoiceShield backend system stopped")
         return jsonify({'success': True, 'message': 'System stopped successfully'})
 
     except Exception as e:
@@ -1089,6 +995,55 @@ def handle_connect():
 def handle_disconnect():
     """Handle client disconnection."""
     logger.info("Client disconnected")
+
+@socketio.on('process_frame')
+def handle_process_frame(data):
+    """Handle frame processing from client."""
+    try:
+        if not is_running:
+            return
+
+        # Get the Base64 image data
+        base64_image = data.get('image')
+        if not base64_image:
+            return
+
+        # Decode the Base64 image
+        frame = decode_base64_image(base64_image)
+        if frame is None:
+            return
+
+        # Process the frame for emotion detection
+        facial_emotions = detect_faces_and_emotions(frame)
+
+        # Get voice emotions (if available)
+        voice_emotions = detect_voice_emotions() if audio_stream and audio_stream.get('active') else []
+
+        # Get current voice emotion for combination
+        current_voice_emotion = None
+        if system_state.last_voice_emotion:
+            current_voice_emotion = {
+                'emotion': system_state.last_voice_emotion,
+                'confidence': system_state.last_voice_confidence
+            }
+
+        # Combine emotions with facial priority
+        overall_emotion = combine_emotions_with_facial_priority(facial_emotions, current_voice_emotion)
+
+        # Update global emotions
+        current_emotions['facial'] = facial_emotions
+        current_emotions['voice'] = voice_emotions
+        current_emotions['overall'] = overall_emotion
+        current_emotions['timestamp'] = float(time.time())
+
+        # Check for anger alert
+        check_anger_alert(facial_emotions)
+
+        # Emit results back to client
+        emit('emotion_update', current_emotions)
+
+    except Exception as e:
+        logger.error(f"Frame processing error: {e}")
 
 if __name__ == '__main__':
     import os

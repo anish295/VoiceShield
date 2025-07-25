@@ -797,9 +797,9 @@
     <div class="container">
         <div class="video-section">
             <div class="video-container">
-                <img id="videoFeed" src="" alt="Video Feed" class="video-feed">
+                <video id="videoFeed" autoplay muted playsinline class="video-feed"></video>
                 <div id="videoPlaceholder" class="video-placeholder">
-                    Click Start
+                    Click Start to access camera
                 </div>
             </div>
             
@@ -933,6 +933,10 @@
         const facialEmotions = document.getElementById('facialEmotions');
         const voiceEmotions = document.getElementById('voiceEmotions');
         const overallEmotions = document.getElementById('overallEmotions');
+
+        // Video capture variables
+        let videoStream = null;
+        let frameSenderInterval = null;
         
         // Status elements
         const cameraStatus = document.getElementById('cameraStatus');
@@ -965,9 +969,6 @@
 
         // Load initial anger configuration
         loadAngerConfiguration();
-
-        // Set video feed source
-        videoFeed.src = `${API_URL}/video_feed`;
         
         // Socket event listeners
         socket.on('connect', function() {
@@ -991,41 +992,53 @@
 
                 console.log('Starting VoiceShield system...');
 
+                // First, start the backend system
                 const response = await fetch(`${API_URL}/api/start`, { method: 'POST' });
                 const result = await response.json();
 
                 if (result.success) {
-                    videoFeed.style.display = 'block';
-                    videoPlaceholder.style.display = 'none';
-                    stopBtn.disabled = false;
-                    startBtn.textContent = 'System Started';
+                    console.log('Backend system started successfully!');
 
-                    console.log('System started successfully!');
-                    if (result.audio_available) {
-                        console.log('Audio processing available');
-                    } else {
-                        console.log('Audio processing not available');
+                    // Now get user's camera stream
+                    try {
+                        videoStream = await navigator.mediaDevices.getUserMedia({
+                            video: {
+                                width: { ideal: 640 },
+                                height: { ideal: 480 },
+                                facingMode: 'user'
+                            },
+                            audio: true
+                        });
+
+                        // Display the stream locally
+                        videoFeed.srcObject = videoStream;
+                        videoFeed.style.display = 'block';
+                        videoPlaceholder.style.display = 'none';
+
+                        // Start sending frames to the backend (10 FPS)
+                        frameSenderInterval = setInterval(() => {
+                            sendFrameToServer(videoFeed);
+                        }, 100); // 100ms = 10 FPS
+
+                        stopBtn.disabled = false;
+                        startBtn.textContent = 'System Started';
+
+                        console.log('Camera access granted and frame sending started');
+                        updateSystemStatus();
+
+                    } catch (cameraError) {
+                        console.error('Camera access failed:', cameraError);
+                        alert('Failed to access camera. Please grant permission and try again.');
+
+                        // Stop the backend system if camera fails
+                        await fetch(`${API_URL}/api/stop`, { method: 'POST' });
+
+                        startBtn.disabled = false;
+                        startBtn.textContent = 'Start WORKING System';
                     }
-                    if (result.camera_available) {
-                        console.log('Camera available');
-                    }
-
-                    // Request permissions AFTER system starts (non-blocking)
-                    setTimeout(() => {
-                        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-                            .then(stream => {
-                                console.log('Permissions granted');
-                                stream.getTracks().forEach(track => track.stop());
-                            })
-                            .catch(error => {
-                                console.log('ℹPermissions will be requested when needed');
-                            });
-                    }, 1000);
-
-                    updateSystemStatus();
                 } else {
-                    console.error('System start failed:', result.error);
-                    alert('Failed to start system: ' + result.error);
+                    console.error('Backend system start failed:', result.error);
+                    alert('Failed to start backend system: ' + result.error);
                     startBtn.disabled = false;
                     startBtn.textContent = 'Start WORKING System';
                 }
@@ -1035,30 +1048,59 @@
                 startBtn.textContent = 'Start WORKING System';
             }
         }
-        
+
+        function sendFrameToServer(videoElement) {
+            if (!videoElement.videoWidth || !videoElement.videoHeight) {
+                return; // Video not ready yet
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = videoElement.videoWidth;
+            canvas.height = videoElement.videoHeight;
+            const context = canvas.getContext('2d');
+            context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+
+            // Convert frame to Base64 and send over Socket.IO
+            const frameData = canvas.toDataURL('image/jpeg', 0.7); // 0.7 is quality
+            socket.emit('process_frame', { image: frameData });
+        }
+
         async function stopSystem() {
             try {
                 stopBtn.disabled = true;
                 stopBtn.textContent = 'Stopping...';
-                
+
+                // Stop sending frames
+                if (frameSenderInterval) {
+                    clearInterval(frameSenderInterval);
+                    frameSenderInterval = null;
+                }
+
+                // Stop the camera stream
+                if (videoStream) {
+                    videoStream.getTracks().forEach(track => track.stop());
+                    videoStream = null;
+                }
+
+                // Stop the backend system
                 const response = await fetch(`${API_URL}/api/stop`, { method: 'POST' });
                 const result = await response.json();
-                
+
                 if (result.success) {
                     videoFeed.style.display = 'none';
                     videoPlaceholder.style.display = 'flex';
                     startBtn.disabled = false;
                     startBtn.textContent = 'Start WORKING System';
                     stopBtn.textContent = 'Stop System';
-                    
+
                     // Clear emotions
-                    facialEmotions.innerHTML = '<div class="no-emotions">Ready to detect real facial emotions</div>';
+                    facialEmotions.innerHTML = '<div class="no-emotions">Ready to detect facial emotions</div>';
                     voiceEmotions.innerHTML = '<div class="no-emotions">Voice detection ready</div>';
-                    overallEmotions.innerHTML = '<div class="no-emotions">System ready - will actually work!</div>';
-                    
+                    overallEmotions.innerHTML = '<div class="no-emotions">System ready - show your face or speak!</div>';
+
                     updateSystemStatus();
                 } else {
-                    alert('Failed to stop system: ' + result.error);
+                    alert('Failed to stop backend system: ' + result.error);
                     stopBtn.disabled = false;
                     stopBtn.textContent = 'Stop System';
                 }
