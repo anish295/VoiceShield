@@ -15,6 +15,7 @@ sys.path.insert(0, str(parent_dir))
 
 from flask import Flask, render_template, Response, jsonify, request
 from flask_socketio import SocketIO, emit
+from flask_cors import CORS
 import cv2
 import numpy as np
 import time
@@ -28,7 +29,11 @@ app = Flask(__name__,
            template_folder=str(parent_dir / 'frontend'),
            static_folder=str(parent_dir / 'frontend' / 'static'))
 app.config['SECRET_KEY'] = 'voiceshield_secret_key'
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+
+# Configure CORS to allow requests from Netlify frontend
+CORS(app, resources={r"/*": {"origins": ["https://voiceshield.netlify.app", "http://localhost:*", "http://127.0.0.1:*"]}})
+
+socketio = SocketIO(app, cors_allowed_origins=["https://voiceshield.netlify.app", "http://localhost:*", "http://127.0.0.1:*"], async_mode='threading')
 
 # Global variables
 camera = None

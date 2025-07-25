@@ -1,0 +1,28 @@
+[build]
+  # No build command needed for static HTML
+  publish = "."
+  
+[build.environment]
+  # Environment variables for the build process
+  NODE_VERSION = "18"
+
+[[headers]]
+  # Apply these headers to all routes
+  for = "/*"
+  [headers.values]
+    # Security headers
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    
+    # CORS headers for API communication
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
+    Access-Control-Allow-Headers = "Content-Type, Authorization"
+
+[[redirects]]
+  # Redirect all routes to index.html for SPA behavior
+  from = "/*"
+  to = "/index.html"
+  status = 200

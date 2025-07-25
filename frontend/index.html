@@ -782,14 +782,14 @@
 <body>
     <div class="header">
         <div class="header-content">
-            <img src="/static/Logo.jpg" alt="VoiceShield Logo" class="logo">
+            <img src="static/Logo.jpg" alt="VoiceShield Logo" class="logo">
             <div class="header-text">
                 <h1>VoiceShield</h1>
                 <p>Real-time Multimodal Emotion Detection System</p>
             </div>
         </div>
         <div class="generals-section">
-            <img src="/static/Generals_logo.jpg" alt="The Generals Logo" class="generals-logo">
+            <img src="static/Generals_logo.jpg" alt="The Generals Logo" class="generals-logo">
             <span class="generals-text">The Generals</span>
         </div>
     </div>
@@ -797,7 +797,7 @@
     <div class="container">
         <div class="video-section">
             <div class="video-container">
-                <img id="videoFeed" src="/video_feed" alt="Video Feed" class="video-feed">
+                <img id="videoFeed" src="" alt="Video Feed" class="video-feed">
                 <div id="videoPlaceholder" class="video-placeholder">
                     Click Start
                 </div>
@@ -915,9 +915,16 @@
     </div>
     
     <script>
+        // API Configuration - uses environment variable or falls back to localhost
+        const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? 'http://localhost:8000'
+            : 'https://voiceshield-x5ij.onrender.com';
+
+        console.log('API URL:', API_URL);
+
         // Initialize Socket.IO connection
-        const socket = io();
-        
+        const socket = io(API_URL);
+
         // DOM elements
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
@@ -958,6 +965,9 @@
 
         // Load initial anger configuration
         loadAngerConfiguration();
+
+        // Set video feed source
+        videoFeed.src = `${API_URL}/video_feed`;
         
         // Socket event listeners
         socket.on('connect', function() {
@@ -981,7 +991,7 @@
 
                 console.log('Starting VoiceShield system...');
 
-                const response = await fetch('/api/start', { method: 'POST' });
+                const response = await fetch(`${API_URL}/api/start`, { method: 'POST' });
                 const result = await response.json();
 
                 if (result.success) {
@@ -1031,7 +1041,7 @@
                 stopBtn.disabled = true;
                 stopBtn.textContent = 'Stopping...';
                 
-                const response = await fetch('/api/stop', { method: 'POST' });
+                const response = await fetch(`${API_URL}/api/stop`, { method: 'POST' });
                 const result = await response.json();
                 
                 if (result.success) {
@@ -1168,7 +1178,7 @@
 
         async function loadAngerConfiguration() {
             try {
-                const response = await fetch('/api/anger_alert/config');
+                const response = await fetch(`${API_URL}/api/anger_alert/config`);
                 const config = await response.json();
 
                 angerThreshold.value = config.threshold;
@@ -1188,7 +1198,7 @@
                     enabled: angerEnabled.checked
                 };
 
-                const response = await fetch('/api/anger_alert/config', {
+                const response = await fetch(`${API_URL}/api/anger_alert/config`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -1219,7 +1229,7 @@
 
         async function updateSystemStatus() {
             try {
-                const response = await fetch('/api/status');
+                const response = await fetch(`${API_URL}/api/status`);
                 const status = await response.json();
                 
                 // Update camera status
