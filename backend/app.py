@@ -13,7 +13,7 @@ current_dir = Path(__file__).parent
 parent_dir = current_dir.parent
 sys.path.insert(0, str(parent_dir))
 
-from flask import Flask, render_template, Response, jsonify, request
+from flask import Flask, render_template, Response, jsonify, request, send_from_directory
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 import cv2
@@ -850,6 +850,11 @@ def trigger_anger_alert(anger_level, emotion_data):
 def index():
     """Main page."""
     return render_template('index.html')
+
+@app.route('/debug')
+def debug():
+    """Debug page."""
+    return send_from_directory('../frontend', 'debug.html')
 
 # video_feed route removed - video is now handled client-side
 

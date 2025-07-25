@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VoiceShield Debug</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #1a1a1a;
+            color: white;
+        }
+        .debug-section {
+            background: #2a2a2a;
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border: 1px solid #444;
+        }
+        .status {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+        .success { background: #2d5a2d; }
+        .error { background: #5a2d2d; }
+        .info { background: #2d4a5a; }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #45a049; }
+        #emotionDisplay {
+            background: #333;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            min-height: 100px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 VoiceShield Debug Console</h1>
+    
+    <div class="debug-section">
+        <h2>📡 Socket.IO Connection Test</h2>
+        <div id="connectionStatus" class="status info">Initializing...</div>
+        <button onclick="testConnection()">Test Connection</button>
+        <button onclick="testEmotions()">Test Emotions</button>
+    </div>
+
+    <div class="debug-section">
+        <h2>🎭 Emotion Display Test</h2>
+        <div id="emotionDisplay">Waiting for emotion data...</div>
+    </div>
+
+    <div class="debug-section">
+        <h2>📋 Debug Log</h2>
+        <div id="debugLog" style="background: #111; padding: 10px; border-radius: 4px; max-height: 300px; overflow-y: auto;"></div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // Debug logging function
+        function debugLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logDiv = document.getElementById('debugLog');
+            const logEntry = document.createElement('div');
+            logEntry.style.color = type === 'error' ? '#ff6b6b' : type === 'success' ? '#51cf66' : '#74c0fc';
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(logEntry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(`[DEBUG] ${message}`);
+        }
+
+        // Initialize Socket.IO
+        let socket;
+        
+        try {
+            debugLog('🔌 Initializing Socket.IO connection...', 'info');
+            socket = io();
+            
+            socket.on('connect', function() {
+                debugLog('✅ Socket.IO connected successfully!', 'success');
+                document.getElementById('connectionStatus').textContent = 'Connected ✅';
+                document.getElementById('connectionStatus').className = 'status success';
+            });
+
+            socket.on('disconnect', function() {
+                debugLog('❌ Socket.IO disconnected', 'error');
+                document.getElementById('connectionStatus').textContent = 'Disconnected ❌';
+                document.getElementById('connectionStatus').className = 'status error';
+            });
+
+            socket.on('emotion_update', function(data) {
+                debugLog('🎭 Received emotion update!', 'success');
+                debugLog(`📊 Data: ${JSON.stringify(data)}`, 'info');
+                
+                // Update emotion display
+                const emotionDiv = document.getElementById('emotionDisplay');
+                
+                if (data.facial && data.facial.length > 0) {
+                    const facial = data.facial[0];
+                    emotionDiv.innerHTML = `
+                        <div style="color: #51cf66; font-size: 20px; font-weight: bold;">
+                            🎭 FACIAL EMOTION DETECTED!
+                        </div>
+                        <div style="margin: 10px 0;">
+                            <strong>Emotion:</strong> ${facial.emotion}<br>
+                            <strong>Confidence:</strong> ${(facial.confidence * 100).toFixed(1)}%<br>
+                            <strong>Time:</strong> ${new Date().toLocaleTimeString()}
+                        </div>
+                    `;
+                    debugLog(`✅ Facial emotion displayed: ${facial.emotion} (${(facial.confidence * 100).toFixed(1)}%)`, 'success');
+                } else if (data.overall && data.overall.emotion) {
+                    const overall = data.overall;
+                    emotionDiv.innerHTML = `
+                        <div style="color: #74c0fc; font-size: 20px; font-weight: bold;">
+                            🎯 OVERALL EMOTION
+                        </div>
+                        <div style="margin: 10px 0;">
+                            <strong>Emotion:</strong> ${overall.emotion}<br>
+                            <strong>Confidence:</strong> ${(overall.confidence * 100).toFixed(1)}%<br>
+                            <strong>Source:</strong> ${overall.source}<br>
+                            <strong>Time:</strong> ${new Date().toLocaleTimeString()}
+                        </div>
+                    `;
+                    debugLog(`✅ Overall emotion displayed: ${overall.emotion}`, 'success');
+                } else {
+                    debugLog('⚪ No emotions in this update', 'info');
+                }
+            });
+
+            socket.on('connect_error', function(error) {
+                debugLog(`❌ Connection error: ${error}`, 'error');
+            });
+
+        } catch (error) {
+            debugLog(`❌ Socket.IO initialization error: ${error}`, 'error');
+        }
+
+        // Test functions
+        function testConnection() {
+            debugLog('🧪 Testing connection...', 'info');
+            if (socket && socket.connected) {
+                debugLog('✅ Socket is connected', 'success');
+            } else {
+                debugLog('❌ Socket is not connected', 'error');
+            }
+        }
+
+        function testEmotions() {
+            debugLog('🧪 Requesting test emotions...', 'info');
+            fetch('/api/test_emotions')
+                .then(response => response.json())
+                .then(data => {
+                    debugLog('✅ Test emotions requested successfully', 'success');
+                    debugLog(`📊 Response: ${JSON.stringify(data)}`, 'info');
+                })
+                .catch(error => {
+                    debugLog(`❌ Test emotions error: ${error}`, 'error');
+                });
+        }
+
+        // Initial status
+        debugLog('🚀 Debug page loaded', 'success');
+    </script>
+</body>
+</html>

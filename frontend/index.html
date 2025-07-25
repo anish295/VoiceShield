@@ -918,6 +918,26 @@
     <script>
         console.log('🚀 JavaScript is loading...');
 
+        // Global error handler to catch all JavaScript errors
+        window.addEventListener('error', function(e) {
+            console.error('🚨 GLOBAL JAVASCRIPT ERROR:');
+            console.error('   Message:', e.message);
+            console.error('   File:', e.filename);
+            console.error('   Line:', e.lineno);
+            console.error('   Column:', e.colno);
+            console.error('   Error object:', e.error);
+            console.error('   Stack trace:', e.error ? e.error.stack : 'No stack trace available');
+
+            // Show error in page title for easy debugging
+            document.title = `ERROR: ${e.message}`;
+        });
+
+        // Unhandled promise rejection handler
+        window.addEventListener('unhandledrejection', function(e) {
+            console.error('🚨 UNHANDLED PROMISE REJECTION:', e.reason);
+            document.title = `PROMISE ERROR: ${e.reason}`;
+        });
+
         // API Configuration - uses environment variable or falls back to localhost
         const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
             ? 'http://localhost:5001'
@@ -939,7 +959,7 @@
         const stopBtn = document.getElementById('stopBtn');
         const videoFeed = document.getElementById('videoFeed');
         const videoPlaceholder = document.getElementById('videoPlaceholder');
-        const facialEmotions = document.getElementById('facialEmotions');
+        const facialEmotions = document.getElementById('facial-Emotions');
         const voiceEmotions = document.getElementById('voiceEmotions');
         const overallEmotions = document.getElementById('overallEmotions');
 
