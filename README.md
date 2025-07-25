@@ -39,6 +39,24 @@ VoiceShield is a **modern Flask-based** real-time emotion detection system that 
 - **Visual popup alerts** with anger level details
 - **Alert logging** to `logs/alerts.log` file
 
+## 🏗️ Project Structure
+
+VoiceShield is now organized with a clear separation between backend and frontend:
+
+```
+VoiceShield/
+├── backend/                    # Flask application & ML processing
+│   ├── app.py                 # Main Flask server
+│   ├── src/                   # Backend modules
+│   └── requirements.txt       # Python dependencies
+├── frontend/                  # Web interface
+│   ├── templates/index.html   # Main web interface
+│   └── static/               # Images and assets
+├── config/                    # Configuration files
+├── logs/                      # System logs
+└── main.py                    # Entry point
+```
+
 ## 🏗️ System Architecture
 
 ```

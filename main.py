@@ -47,8 +47,9 @@ def main():
         print("🌐 Access at: http://localhost:5001")
         print("=" * 50)
 
-        # Run Flask app directly
-        subprocess.run([sys.executable, "working_flask_app.py"], check=True)
+        # Run Flask app from backend directory
+        backend_app = Path(__file__).parent / "backend" / "app.py"
+        subprocess.run([sys.executable, str(backend_app)], check=True)
 
     except KeyboardInterrupt:
         print("\nShutdown requested by user")

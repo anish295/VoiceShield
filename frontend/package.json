@@ -1,0 +1,30 @@
+{
+  "name": "voiceshield-frontend",
+  "version": "1.0.0",
+  "description": "VoiceShield Frontend - Real-time Multimodal Emotion Detection Interface",
+  "main": "templates/index.html",
+  "scripts": {
+    "dev": "echo 'Frontend is served by Flask backend'",
+    "build": "echo 'No build process required for static frontend'"
+  },
+  "keywords": [
+    "emotion-detection",
+    "real-time",
+    "multimodal",
+    "voice",
+    "facial",
+    "flask",
+    "websocket"
+  ],
+  "author": "The Generals",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "."
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

@@ -4,6 +4,15 @@ WORKING VoiceShield Flask Application
 This version actually detects faces and emotions properly.
 """
 
+import os
+import sys
+from pathlib import Path
+
+# Add the parent directory to the path so we can import from src
+current_dir = Path(__file__).parent
+parent_dir = current_dir.parent
+sys.path.insert(0, str(parent_dir))
+
 from flask import Flask, render_template, Response, jsonify, request
 from flask_socketio import SocketIO, emit
 import cv2
@@ -14,8 +23,10 @@ import logging
 import json
 import yaml
 
-# Initialize Flask app
-app = Flask(__name__)
+# Initialize Flask app with updated template and static folders
+app = Flask(__name__,
+           template_folder=str(parent_dir / 'frontend' / 'templates'),
+           static_folder=str(parent_dir / 'frontend' / 'static'))
 app.config['SECRET_KEY'] = 'voiceshield_secret_key'
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
@@ -749,7 +760,8 @@ def cleanup_audio():
 def load_config():
     """Load configuration from config.yaml file."""
     try:
-        with open('config/config.yaml', 'r') as f:
+        config_path = parent_dir / 'config' / 'config.yaml'
+        with open(config_path, 'r') as f:
             return yaml.safe_load(f)
     except Exception as e:
         logger.warning(f"Could not load config file: {e}")
@@ -823,7 +835,8 @@ def trigger_anger_alert(anger_level, emotion_data):
         socketio.emit('anger_alert', alert_data)
 
         # Log to alerts log file
-        with open('logs/alerts.log', 'a') as f:
+        log_path = parent_dir / 'logs' / 'alerts.log'
+        with open(log_path, 'a') as f:
             f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - ANGER ALERT - Level: {anger_level:.2f} ({anger_level*100:.1f}%)\n")
 
     except Exception as e:
@@ -880,7 +893,7 @@ def process_emotions_realtime():
 @app.route('/')
 def index():
     """Main page."""
-    return render_template('working_index.html')
+    return render_template('index.html')
 
 @app.route('/video_feed')
 def video_feed():
