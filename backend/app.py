@@ -107,9 +107,17 @@ def initialize_face_detection():
         face_cascade = cv2.CascadeClassifier(cascade_path)
 
         if face_cascade.empty():
-            raise Exception("Could not load face cascade")
+            logger.error("Could not load face cascade at: %s", cascade_path)
+            return False
 
         logger.info("Face detection initialized successfully")
+        # Check DeepFace availability
+        try:
+            from deepface import DeepFace
+            logger.info("DeepFace is available for emotion detection.")
+        except ImportError as e:
+            logger.error(f"DeepFace not installed: {e}")
+            return False
         return True
 
     except Exception as e:
@@ -963,7 +971,8 @@ def start_system():
 
         # Initialize face detection
         if not initialize_face_detection():
-            return jsonify({'success': False, 'error': 'Face detection initialization failed'})
+            logger.error("Face detection or DeepFace initialization failed. System will not start.")
+            return jsonify({'success': False, 'error': 'Face detection or DeepFace initialization failed. Please check backend logs and dependencies.'})
 
         # Camera is now handled by client - just mark as ready
         system_state.set_camera_active(True)

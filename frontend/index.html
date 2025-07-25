@@ -950,8 +950,10 @@
         console.log('Attempting to connect to:', API_URL);
         const socket = io(API_URL);
 
+        // Socket.IO connection error handling
         socket.on('connect_error', function(error) {
             console.error('Socket.IO connection error:', error);
+            alert('Could not connect to backend server. Please check your network or backend status.');
         });
 
         // DOM elements
@@ -964,7 +966,11 @@
         const overallEmotions = document.getElementById('overallEmotions');
 
         // Verify critical DOM elements exist
-        if (!facialEmotions || !voiceEmotions || !overallEmotions) {
+        if (!facialEmotions) {
+            alert('Critical error: facial-emotions element not found in the DOM. Please check your HTML.');
+            console.error('❌ facialEmotions element not found!');
+        }
+        if (!voiceEmotions || !overallEmotions) {
             console.error('❌ Missing emotion display elements!');
         }
 
@@ -1151,6 +1157,7 @@
                 }
             } catch (error) {
                 console.error('Start system error:', error);
+                alert('Error starting system: ' + error);
                 startBtn.disabled = false;
                 startBtn.textContent = 'Start WORKING System';
             }
@@ -1171,7 +1178,11 @@
             // Convert frame to Base64 and send over Socket.IO
             const frameData = canvas.toDataURL('image/jpeg', 0.7); // 0.7 is quality
             console.log('Sending frame to server, size:', frameData.length);
-            socket.emit('process_frame', { image: frameData });
+            if (typeof socket.emit === 'function') {
+                socket.emit('process_frame', { image: frameData });
+            } else {
+                alert('Socket.IO is not connected. Frames cannot be sent.');
+            }
         }
 
         async function stopSystem() {
