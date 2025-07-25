@@ -91,6 +91,11 @@ Add these environment variables in Render dashboard:
 - TensorFlow and DeepFace are memory-intensive
 - Consider using lighter models for free tier
 
+### Dependency Compatibility
+- numpy version is constrained to >=1.23.5,<=1.24.3 due to TensorFlow 2.13.0 requirements
+- This ensures compatibility between OpenCV, TensorFlow, and DeepFace
+- If you need newer numpy versions, consider upgrading TensorFlow to 2.15+ (may require code changes)
+
 ## 🌐 Accessing Your Deployed App
 
 After successful deployment:
