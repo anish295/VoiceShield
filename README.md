@@ -69,7 +69,7 @@ VoiceShield/
 ┌─────────────────┐    ┌─────────────────┐
 │   DeepFace      │    │ Audio Feature   │
 │ Face Detection  │    │  Extraction     │
-│ + Emotion AI    │    │  (librosa)      │
+│ + Emotion AI    │    │                 │
 └─────────┬───────┘    └─────────┬───────┘
           │                      │
           └──────────┬───────────┘
