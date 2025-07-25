@@ -913,7 +913,7 @@ def start_system():
             'success': True,
             'message': 'System started successfully',
             'audio_available': audio_stream is not None,
-            'camera_available': camera_success
+            'camera_available': True
         })
 
     except Exception as e:
