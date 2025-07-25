@@ -869,7 +869,7 @@
 
             <div class="emotion-card">
                 <h3>👤 Facial Emotions</h3>
-                <div id="facialEmotions">
+                <div id="facial-emotions">
                     <div class="no-emotions">Ready to detect facial emotions</div>
                 </div>
             </div>
@@ -959,7 +959,7 @@
         const stopBtn = document.getElementById('stopBtn');
         const videoFeed = document.getElementById('videoFeed');
         const videoPlaceholder = document.getElementById('videoPlaceholder');
-        const facialEmotions = document.getElementById('facialEmotions');
+        const facialEmotions = document.getElementById('facial-emotions');
         const voiceEmotions = document.getElementById('voiceEmotions');
         const overallEmotions = document.getElementById('overallEmotions');
 
@@ -1047,7 +1047,7 @@
                 document.title = `VoiceShield - FACIAL: ${data.facial[0].emotion} (${(data.facial[0].confidence * 100).toFixed(0)}%)`;
 
                 // DIRECT DOM UPDATE TEST
-                const facialElement = document.getElementById('facialemotions');
+                const facialElement = document.getElementById('facial-emotions');
                 console.log('🔍 Facial element check:', {
                     exists: !!facialElement,
                     id: facialElement ? facialElement.id : 'N/A',
@@ -1248,7 +1248,7 @@
 
             if (!facialEmotions) {
                 console.error('❌ facialEmotions element not found! Trying to find it...');
-                const altFacial = document.getElementById('facialemotions');
+                const altFacial = document.getElementById('facial-emotions');
                 console.log('🔍 Alternative search result:', altFacial);
                 return;
             }
@@ -1264,7 +1264,7 @@
 
             if (data.facial && data.facial.length > 0) {
                 const facial = data.facial[0];
-                console.log('🔥 FACIAL EMOTION DETECTED IN updateEmotions():');
+                console.log('� FACIAL EMOTION DETECTED IN updateEmotions():');
                 console.log('   Emotion:', facial.emotion);
                 console.log('   Confidence:', facial.confidence);
                 console.log('   Full object:', facial);
