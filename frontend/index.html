@@ -942,6 +942,11 @@
         const voiceEmotions = document.getElementById('voiceEmotions');
         const overallEmotions = document.getElementById('overallEmotions');
 
+        // Verify critical DOM elements exist
+        if (!facialEmotions || !voiceEmotions || !overallEmotions) {
+            console.error('❌ Missing emotion display elements!');
+        }
+
         // Video capture variables
         let videoStream = null;
         let frameSenderInterval = null;
@@ -985,7 +990,7 @@
         });
         
         socket.on('emotion_update', function(data) {
-            console.log('Received emotion update:', data);
+            console.log('🎭 Received emotion update:', data);
             updateEmotions(data);
         });
 
@@ -1123,6 +1128,8 @@
         }
         
         function updateEmotions(data) {
+            console.log('🔄 updateEmotions called with:', data);
+
             // Update facial emotions
             if (data.facial && data.facial.length > 0) {
                 const facial = data.facial[0];
@@ -1132,10 +1139,12 @@
                         <div class="emotion-confidence">Confidence: ${(facial.confidence * 100).toFixed(1)}%</div>
                     </div>
                 `;
+                console.log('👤 Facial emotion updated:', facial.emotion);
             } else {
                 facialEmotions.innerHTML = '<div class="no-emotions">Looking for faces to detect...</div>';
+                console.log('👤 No facial emotions detected');
             }
-            
+
             // Update voice emotions (only if real audio is detected)
             if (data.voice && data.voice.length > 0 && data.voice[0].source === 'real_audio') {
                 const voice = data.voice[0];
@@ -1160,10 +1169,12 @@
                         <div class="emotion-confidence" style="font-size: 0.8em; margin-top: 5px;">${scoresHtml}</div>
                     </div>
                 `;
+                console.log('🎤 Voice emotion updated:', voice.emotion);
             } else {
                 voiceEmotions.innerHTML = '<div class="no-emotions">Speak into microphone...</div>';
+                console.log('🎤 No voice emotions detected');
             }
-            
+
             // Update overall emotion (single combined result)
             if (data.overall && data.overall.emotion) {
                 const overall = data.overall;
@@ -1183,8 +1194,10 @@
                         <div class="emotion-confidence">Source: ${sourceText[overall.source] || overall.source}</div>
                     </div>
                 `;
+                console.log('🎯 Overall emotion updated:', overall.emotion, overall.confidence);
             } else {
                 overallEmotions.innerHTML = '<div class="no-emotions">Show your face or speak - system will detect emotions!</div>';
+                console.log('🎯 No overall emotions detected');
             }
         }
 

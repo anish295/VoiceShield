@@ -1033,31 +1033,21 @@ def handle_disconnect():
 def handle_process_frame(data):
     """Handle frame processing from client."""
     try:
-        logger.info("Received frame from client")
-
         if not is_running:
-            logger.warning("System not running, ignoring frame")
             return
 
         # Get the Base64 image data
         base64_image = data.get('image')
         if not base64_image:
-            logger.warning("No image data in frame")
             return
-
-        logger.info(f"Processing frame, image data length: {len(base64_image)}")
 
         # Decode the Base64 image
         frame = decode_base64_image(base64_image)
         if frame is None:
-            logger.error("Failed to decode Base64 image")
             return
-
-        logger.info(f"Frame decoded successfully, shape: {frame.shape}")
 
         # Process the frame for emotion detection
         facial_emotions = detect_faces_and_emotions(frame)
-        logger.info(f"Detected {len(facial_emotions)} facial emotions")
 
         # Get voice emotions (if available)
         voice_emotions = detect_voice_emotions() if audio_stream and audio_stream.get('active') else []
@@ -1079,18 +1069,17 @@ def handle_process_frame(data):
         current_emotions['overall'] = overall_emotion
         current_emotions['timestamp'] = float(time.time())
 
-        logger.info(f"Emitting emotion update: facial={len(facial_emotions)}, overall={overall_emotion}")
-
         # Check for anger alert
         check_anger_alert(facial_emotions)
 
         # Emit results back to client
         emit('emotion_update', current_emotions)
 
+        # Simple logging for debugging
+        print(f"📸 Frame processed: {len(facial_emotions)} faces, overall: {overall_emotion.get('emotion', 'none')}")
+
     except Exception as e:
         logger.error(f"Frame processing error: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
 
 if __name__ == '__main__':
     import os
