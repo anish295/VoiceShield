@@ -880,6 +880,43 @@ def health_check():
         'timestamp': float(time.time())
     })
 
+@app.route('/api/test_emotions')
+def test_emotions():
+    """Test endpoint to send fake emotion data."""
+    test_data = {
+        'facial': [
+            {
+                'emotion': 'happy',
+                'confidence': 0.85,
+                'region': {'x': 100, 'y': 100, 'w': 150, 'h': 150}
+            }
+        ],
+        'voice': [
+            {
+                'emotion': 'excited',
+                'confidence': 0.75,
+                'source': 'real_audio',
+                'audio_energy': 0.8,
+                'all_scores': {
+                    'excited': 0.75,
+                    'happy': 0.65,
+                    'neutral': 0.35
+                }
+            }
+        ],
+        'overall': {
+            'emotion': 'happy',
+            'confidence': 0.8,
+            'source': 'facial_voice_combined'
+        },
+        'timestamp': time.time()
+    }
+
+    # Emit to all connected clients
+    socketio.emit('emotion_update', test_data)
+
+    return jsonify({'status': 'Test emotions sent', 'data': test_data})
+
 @app.route('/test')
 def test_page():
     """Simple test page for Socket.IO."""
@@ -1075,8 +1112,20 @@ def handle_process_frame(data):
         # Emit results back to client
         emit('emotion_update', current_emotions)
 
-        # Simple logging for debugging
+        # Enhanced debugging
         print(f"📸 Frame processed: {len(facial_emotions)} faces, overall: {overall_emotion.get('emotion', 'none')}")
+        if len(facial_emotions) > 0:
+            print(f"🎭 FACIAL EMOTION DETECTED: {facial_emotions[0]['emotion']} (confidence: {facial_emotions[0]['confidence']:.2f})")
+            print(f"📤 EMITTING TO FRONTEND: facial={facial_emotions}, overall={overall_emotion}")
+
+        # Debug: Print the exact data being sent
+        if len(facial_emotions) > 0 or overall_emotion.get('emotion') != 'neutral':
+            print(f"🔥 DEBUG - Sending emotion data:")
+            print(f"   Facial: {current_emotions['facial']}")
+            print(f"   Voice: {current_emotions['voice']}")
+            print(f"   Overall: {current_emotions['overall']}")
+            print(f"   Timestamp: {current_emotions['timestamp']}")
+            print("=" * 50)
 
     except Exception as e:
         logger.error(f"Frame processing error: {e}")

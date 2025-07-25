@@ -806,6 +806,7 @@
             <div class="controls">
                 <button id="startBtn" class="btn btn-start">Start WORKING System</button>
                 <button id="stopBtn" class="btn btn-stop" disabled>Stop System</button>
+                <button id="testBtn" class="btn btn-warning" style="margin-left: 10px; background-color: #ff9800; color: white;">Test Emotions</button>
             </div>
 
             <!-- Anger Alert Configuration -->
@@ -965,6 +966,20 @@
         startBtn.addEventListener('click', startSystem);
         stopBtn.addEventListener('click', stopSystem);
 
+        // Test button
+        const testBtn = document.getElementById('testBtn');
+        testBtn.addEventListener('click', function() {
+            console.log('🧪 Test button clicked - requesting test emotions');
+            fetch('/api/test_emotions')
+                .then(response => response.json())
+                .then(data => {
+                    console.log('🧪 Test emotions response:', data);
+                })
+                .catch(error => {
+                    console.error('🧪 Test emotions error:', error);
+                });
+        });
+
         // Anger alert configuration elements
         const angerThreshold = document.getElementById('angerThreshold');
         const thresholdValue = document.getElementById('thresholdValue');
@@ -990,8 +1005,66 @@
         });
         
         socket.on('emotion_update', function(data) {
-            console.log('🎭 Received emotion update:', data);
-            updateEmotions(data);
+            console.log('🎭 RECEIVED EMOTION UPDATE:', data);
+            console.log('📊 Data structure check:', {
+                hasData: !!data,
+                hasFacial: !!data.facial,
+                facialIsArray: Array.isArray(data.facial),
+                facialLength: data.facial ? data.facial.length : 'N/A',
+                hasVoice: !!data.voice,
+                hasOverall: !!data.overall,
+                timestamp: data.timestamp
+            });
+
+            // Enhanced debugging for facial data
+            if (data.facial && data.facial.length > 0) {
+                console.log('🔥 FACIAL EMOTION FOUND!');
+                console.log('   Emotion:', data.facial[0].emotion);
+                console.log('   Confidence:', data.facial[0].confidence);
+                console.log('   Full facial object:', data.facial[0]);
+
+                // Update page title to show facial emotion
+                document.title = `VoiceShield - FACIAL: ${data.facial[0].emotion} (${(data.facial[0].confidence * 100).toFixed(0)}%)`;
+
+                // DIRECT DOM UPDATE TEST
+                const facialElement = document.getElementById('facial-emotions');
+                console.log('🔍 Facial element check:', {
+                    exists: !!facialElement,
+                    id: facialElement ? facialElement.id : 'N/A',
+                    innerHTML: facialElement ? facialElement.innerHTML : 'N/A'
+                });
+
+                if (facialElement) {
+                    const testHtml = `<div style="color: red; font-size: 24px; font-weight: bold; background: yellow; padding: 10px; border: 3px solid red;">
+                        🎭 FACIAL: ${data.facial[0].emotion.toUpperCase()}
+                        <br>Confidence: ${(data.facial[0].confidence * 100).toFixed(1)}%
+                        <br>Time: ${new Date().toLocaleTimeString()}
+                    </div>`;
+                    facialElement.innerHTML = testHtml;
+                    console.log('✅ DIRECT UPDATE SUCCESSFUL - Set innerHTML to:', testHtml);
+                } else {
+                    console.error('❌ FACIAL ELEMENT NOT FOUND!');
+                    // Try to find it by other means
+                    const allElements = document.querySelectorAll('[id*="facial"]');
+                    console.log('🔍 Elements with "facial" in ID:', allElements);
+                }
+            } else {
+                console.log('⚪ No facial emotions in this update');
+            }
+
+            // Update overall emotion in title if no facial
+            if (data.overall && data.overall.emotion && (!data.facial || data.facial.length === 0)) {
+                document.title = `VoiceShield - OVERALL: ${data.overall.emotion} (${(data.overall.confidence * 100).toFixed(0)}%)`;
+            }
+
+            // Call the original update function
+            try {
+                updateEmotions(data);
+                console.log('✅ updateEmotions() called successfully');
+            } catch (error) {
+                console.error('❌ Error in updateEmotions():', error);
+                console.error('Stack trace:', error.stack);
+            }
         });
 
         socket.on('anger_alert', function(data) {
@@ -1128,21 +1201,82 @@
         }
         
         function updateEmotions(data) {
-            console.log('🔄 updateEmotions called with:', data);
+            console.log('🔄 updateEmotions() CALLED with data:', data);
 
-            // Update facial emotions
+            // Flash background to show function is called
+            document.body.style.backgroundColor = '#001122';
+            setTimeout(() => {
+                document.body.style.backgroundColor = '';
+            }, 100);
+
+            // Comprehensive DOM element check
+            console.log('🔍 DOM ELEMENTS CHECK:');
+            console.log('   facialEmotions:', {
+                exists: !!facialEmotions,
+                id: facialEmotions ? facialEmotions.id : 'N/A',
+                tagName: facialEmotions ? facialEmotions.tagName : 'N/A',
+                innerHTML: facialEmotions ? facialEmotions.innerHTML.substring(0, 100) : 'N/A'
+            });
+            console.log('   voiceEmotions:', {
+                exists: !!voiceEmotions,
+                id: voiceEmotions ? voiceEmotions.id : 'N/A'
+            });
+            console.log('   overallEmotions:', {
+                exists: !!overallEmotions,
+                id: overallEmotions ? overallEmotions.id : 'N/A'
+            });
+
+            if (!facialEmotions) {
+                console.error('❌ facialEmotions element not found! Trying to find it...');
+                const altFacial = document.getElementById('facial-emotions');
+                console.log('🔍 Alternative search result:', altFacial);
+                return;
+            }
+
+            // FACIAL EMOTIONS PROCESSING
+            console.log('🎭 FACIAL EMOTIONS PROCESSING:');
+            console.log('   Data check:', {
+                hasFacial: !!data.facial,
+                isArray: Array.isArray(data.facial),
+                length: data.facial ? data.facial.length : 'N/A',
+                firstItem: data.facial && data.facial[0] ? data.facial[0] : 'N/A'
+            });
+
             if (data.facial && data.facial.length > 0) {
                 const facial = data.facial[0];
-                facialEmotions.innerHTML = `
-                    <div class="emotion-display">
-                        <div class="emotion-name">${facial.emotion}</div>
-                        <div class="emotion-confidence">Confidence: ${(facial.confidence * 100).toFixed(1)}%</div>
+                console.log('🔥 FACIAL EMOTION DETECTED IN updateEmotions():');
+                console.log('   Emotion:', facial.emotion);
+                console.log('   Confidence:', facial.confidence);
+                console.log('   Full object:', facial);
+
+                const emotionHtml = `
+                    <div class="emotion-display" style="background: #ff6b6b; color: white; padding: 15px; border-radius: 8px; margin: 10px 0;">
+                        <div class="emotion-name" style="font-size: 24px; font-weight: bold;">${facial.emotion.toUpperCase()}</div>
+                        <div class="emotion-confidence" style="font-size: 16px;">Confidence: ${(facial.confidence * 100).toFixed(1)}%</div>
+                        <div style="font-size: 12px; margin-top: 5px;">Updated: ${new Date().toLocaleTimeString()}</div>
                     </div>
                 `;
-                console.log('👤 Facial emotion updated:', facial.emotion);
+
+                console.log('🎨 Generated HTML:', emotionHtml);
+                console.log('🎯 About to set facialEmotions.innerHTML...');
+
+                try {
+                    facialEmotions.innerHTML = emotionHtml;
+                    console.log('✅ SUCCESS: facialEmotions.innerHTML set!');
+                    console.log('🔍 Verification - Current innerHTML:', facialEmotions.innerHTML);
+                    console.log('🔍 Element visibility:', {
+                        offsetWidth: facialEmotions.offsetWidth,
+                        offsetHeight: facialEmotions.offsetHeight,
+                        style: facialEmotions.style.cssText
+                    });
+                } catch (error) {
+                    console.error('❌ ERROR setting innerHTML:', error);
+                }
             } else {
-                facialEmotions.innerHTML = '<div class="no-emotions">Looking for faces to detect...</div>';
-                console.log('👤 No facial emotions detected');
+                const noEmotionHtml = '<div class="no-emotions" style="color: #888; font-style: italic;">Looking for faces to detect...</div>';
+                console.log('⚪ No facial emotions detected, setting default message');
+                facialEmotions.innerHTML = noEmotionHtml;
+                console.log('✅ Default message set:', facialEmotions.innerHTML);
             }
 
             // Update voice emotions (only if real audio is detected)
