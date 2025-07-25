@@ -1047,7 +1047,7 @@
                 document.title = `VoiceShield - FACIAL: ${data.facial[0].emotion} (${(data.facial[0].confidence * 100).toFixed(0)}%)`;
 
                 // DIRECT DOM UPDATE TEST
-                const facialElement = document.getElementById('facial-emotions');
+                const facialElement = document.getElementById('facialemotions');
                 console.log('🔍 Facial element check:', {
                     exists: !!facialElement,
                     id: facialElement ? facialElement.id : 'N/A',
@@ -1248,7 +1248,7 @@
 
             if (!facialEmotions) {
                 console.error('❌ facialEmotions element not found! Trying to find it...');
-                const altFacial = document.getElementById('facial-emotions');
+                const altFacial = document.getElementById('facialemotions');
                 console.log('🔍 Alternative search result:', altFacial);
                 return;
             }
