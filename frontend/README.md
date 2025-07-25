@@ -6,12 +6,12 @@ This is the frontend interface for the VoiceShield emotion detection system.
 
 ```
 frontend/
-├── templates/
-│   └── index.html          # Main web interface
+├── index.html             # Main web interface
 ├── static/
 │   ├── Logo.jpg           # VoiceShield logo
 │   └── Generals_logo.jpg  # The Generals logo
-└── README.md
+├── package.json           # Frontend package configuration
+└── README.md              # This documentation
 ```
 
 ## Features

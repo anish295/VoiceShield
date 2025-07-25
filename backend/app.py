@@ -25,7 +25,7 @@ import yaml
 
 # Initialize Flask app with updated template and static folders
 app = Flask(__name__,
-           template_folder=str(parent_dir / 'frontend' / 'templates'),
+           template_folder=str(parent_dir / 'frontend'),
            static_folder=str(parent_dir / 'frontend' / 'static'))
 app.config['SECRET_KEY'] = 'voiceshield_secret_key'
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')

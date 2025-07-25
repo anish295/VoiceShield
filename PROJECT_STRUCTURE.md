@@ -19,8 +19,7 @@ VoiceShield/
 │       └── utils/            # Utility functions
 │
 ├── frontend/                  # Frontend web interface
-│   ├── templates/            # HTML templates
-│   │   └── index.html        # Main web interface (formerly working_index.html)
+│   ├── index.html            # Main web interface (formerly working_index.html)
 │   ├── static/               # Static assets
 │   │   ├── Logo.jpg          # VoiceShield logo
 │   │   └── Generals_logo.jpg # The Generals logo
@@ -55,7 +54,7 @@ VoiceShield/
 - **Moved**: `src/` directory to `backend/src/`
 
 ### 2. Frontend Organization
-- **Moved**: `templates/working_index.html` → `frontend/templates/index.html`
+- **Moved**: `templates/working_index.html` → `frontend/index.html`
 - **Moved**: `static/*.jpg` → `frontend/static/`
 - **Added**: Frontend-specific documentation and package.json
 - **Maintained**: All CSS, JavaScript, and HTML functionality
