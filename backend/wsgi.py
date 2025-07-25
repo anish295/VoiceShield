@@ -7,4 +7,4 @@ Used for production deployment with Gunicorn
 from app import app, socketio
 
 if __name__ == "__main__":
-    socketio.run(app)
+    socketio.run(app, allow_unsafe_werkzeug=True)
