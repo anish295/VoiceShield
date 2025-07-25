@@ -35,7 +35,7 @@ app.config['SECRET_KEY'] = 'voiceshield_secret_key'
 # Configure CORS to allow requests from Netlify frontend
 CORS(app, resources={r"/*": {"origins": ["https://voiceshield.netlify.app", "http://localhost:*", "http://127.0.0.1:*"]}})
 
-socketio = SocketIO(app, cors_allowed_origins=["https://voiceshield.netlify.app", "http://localhost:*", "http://127.0.0.1:*"], async_mode='threading')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 # Global variables
 camera = None
@@ -880,6 +880,37 @@ def health_check():
         'timestamp': float(time.time())
     })
 
+@app.route('/test')
+def test_page():
+    """Simple test page for Socket.IO."""
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Socket.IO Test</title>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    </head>
+    <body>
+        <h1>Socket.IO Test</h1>
+        <div id="status">Connecting...</div>
+        <script>
+            console.log('Test page loaded');
+            const socket = io('http://localhost:5001');
+
+            socket.on('connect', function() {
+                console.log('Connected!');
+                document.getElementById('status').innerHTML = 'Connected!';
+            });
+
+            socket.on('connect_error', function(error) {
+                console.error('Connection error:', error);
+                document.getElementById('status').innerHTML = 'Connection error: ' + error;
+            });
+        </script>
+    </body>
+    </html>
+    '''
+
 @app.route('/api/start', methods=['POST'])
 def start_system():
     """Start the emotion detection system for client-server architecture."""
@@ -988,33 +1019,45 @@ def api_anger_alert_config():
 @socketio.on('connect')
 def handle_connect():
     """Handle client connection."""
-    logger.info("Client connected")
+    print("🔌 Socket.IO client connected!")
+    logger.info("Socket.IO client connected")
     emit('status', {'message': 'Connected to Working VoiceShield'})
 
 @socketio.on('disconnect')
 def handle_disconnect():
     """Handle client disconnection."""
-    logger.info("Client disconnected")
+    print("🔌 Socket.IO client disconnected!")
+    logger.info("Socket.IO client disconnected")
 
 @socketio.on('process_frame')
 def handle_process_frame(data):
     """Handle frame processing from client."""
     try:
+        logger.info("Received frame from client")
+
         if not is_running:
+            logger.warning("System not running, ignoring frame")
             return
 
         # Get the Base64 image data
         base64_image = data.get('image')
         if not base64_image:
+            logger.warning("No image data in frame")
             return
+
+        logger.info(f"Processing frame, image data length: {len(base64_image)}")
 
         # Decode the Base64 image
         frame = decode_base64_image(base64_image)
         if frame is None:
+            logger.error("Failed to decode Base64 image")
             return
+
+        logger.info(f"Frame decoded successfully, shape: {frame.shape}")
 
         # Process the frame for emotion detection
         facial_emotions = detect_faces_and_emotions(frame)
+        logger.info(f"Detected {len(facial_emotions)} facial emotions")
 
         # Get voice emotions (if available)
         voice_emotions = detect_voice_emotions() if audio_stream and audio_stream.get('active') else []
@@ -1036,6 +1079,8 @@ def handle_process_frame(data):
         current_emotions['overall'] = overall_emotion
         current_emotions['timestamp'] = float(time.time())
 
+        logger.info(f"Emitting emotion update: facial={len(facial_emotions)}, overall={overall_emotion}")
+
         # Check for anger alert
         check_anger_alert(facial_emotions)
 
@@ -1044,6 +1089,8 @@ def handle_process_frame(data):
 
     except Exception as e:
         logger.error(f"Frame processing error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
 
 if __name__ == '__main__':
     import os

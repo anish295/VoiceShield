@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VoiceShield - WORKING Flask Interface</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <style>
         * {
             margin: 0;
@@ -915,15 +915,23 @@
     </div>
     
     <script>
+        console.log('🚀 JavaScript is loading...');
+
         // API Configuration - uses environment variable or falls back to localhost
         const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-            ? 'http://localhost:8000'
+            ? 'http://localhost:5001'
             : 'https://voiceshield-x5ij.onrender.com';
 
         console.log('API URL:', API_URL);
+        console.log('Socket.IO available:', typeof io !== 'undefined');
 
         // Initialize Socket.IO connection
+        console.log('Attempting to connect to:', API_URL);
         const socket = io(API_URL);
+
+        socket.on('connect_error', function(error) {
+            console.error('Socket.IO connection error:', error);
+        });
 
         // DOM elements
         const startBtn = document.getElementById('startBtn');
@@ -977,6 +985,7 @@
         });
         
         socket.on('emotion_update', function(data) {
+            console.log('Received emotion update:', data);
             updateEmotions(data);
         });
 
@@ -1051,6 +1060,7 @@
 
         function sendFrameToServer(videoElement) {
             if (!videoElement.videoWidth || !videoElement.videoHeight) {
+                console.log('Video not ready yet, dimensions:', videoElement.videoWidth, 'x', videoElement.videoHeight);
                 return; // Video not ready yet
             }
 
@@ -1062,6 +1072,7 @@
 
             // Convert frame to Base64 and send over Socket.IO
             const frameData = canvas.toDataURL('image/jpeg', 0.7); // 0.7 is quality
+            console.log('Sending frame to server, size:', frameData.length);
             socket.emit('process_frame', { image: frameData });
         }
 
