@@ -1,7 +1,7 @@
 # Core Dependencies for VoiceShield Flask Application
 # Computer Vision and Face Detection
 opencv-python>=4.8.0
-numpy>=1.24.0
+numpy>=1.26.0
 
 # Facial Emotion Recognition
 deepface>=0.0.79
