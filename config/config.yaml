@@ -1,0 +1,117 @@
+# VoiceShield Configuration File
+
+# System Settings
+system:
+  debug: false
+  log_level: "INFO"
+  max_fps: 60  # Increased for ultra-smooth video
+  target_latency: 0.5  # Reduced latency for better responsiveness
+
+# Video Processing
+video:
+  camera_index: 0
+  frame_width: 1280  # Higher resolution for better accuracy
+  frame_height: 720  # HD quality
+  face_detection_confidence: 0.6  # Slightly lower for better detection
+  max_faces: 10
+  
+# Audio Processing
+audio:
+  sample_rate: 16000
+  chunk_size: 1024
+  channels: 1
+  format: "int16"
+  device_index: null  # null for default
+  
+# Facial Emotion Recognition
+facial_emotion:
+  model: "deepface"  # options: "deepface", "fer"
+  backend: "opencv"  # options: "opencv", "mtcnn", "retinaface"
+  confidence_threshold: 0.05  # Extremely low for maximum detection
+  quality_threshold: 0.1  # Very low minimum face quality
+  temporal_smoothing: 0.3  # Smoothing factor for stable results
+  emotions:
+    - "angry"
+    - "happy"
+    - "sad"
+    - "fearful"
+    - "neutral"
+    - "surprised"
+    - "disgusted"
+
+# Voice Emotion Recognition
+voice_emotion:
+  model: "speechbrain"  # options: "speechbrain", "librosa"
+  window_size: 2.0  # Reduced to 2 seconds
+  overlap: 0.3  # Reduced overlap
+  confidence_threshold: 0.05  # Extremely low for maximum detection
+  emotions:
+    - "angry"
+    - "happy"
+    - "sad"
+    - "fearful"
+    - "neutral"
+    
+# Fusion Engine
+fusion:
+  method: "weighted_average"  # options: "weighted_average", "rule_based", "neural"
+  weights:
+    facial: 0.6
+    voice: 0.4
+  aggression_threshold: 0.7
+  
+# Alert System
+alerts:
+  enabled: true
+  aggression_alert:
+    enabled: true
+    cooldown: 30  # seconds between alerts
+    methods:
+      sms:
+        enabled: false
+        phone_number: ""
+      email:
+        enabled: false
+        recipient: ""
+        smtp_server: "smtp.gmail.com"
+        smtp_port: 587
+      popup:
+        enabled: true
+        duration: 5  # seconds
+  anger_alert:
+    enabled: true
+    threshold: 0.6  # anger confidence threshold (0.0 to 1.0)
+    cooldown: 30  # seconds between alerts
+    popup_duration: 10  # seconds to show popup
+        
+# Privacy Settings
+privacy:
+  face_blur: false
+  save_data: false
+  anonymize_logs: true
+  consent_required: true
+  
+# Performance
+performance:
+  use_gpu: true
+  batch_processing: false
+  memory_limit: 2048  # MB
+  
+# Twilio Configuration (if using SMS)
+twilio:
+  account_sid: ""
+  auth_token: ""
+  from_number: ""
+  
+# Email Configuration
+email:
+  username: ""
+  password: ""
+  
+# Logging
+logging:
+  log_file: "logs/voiceshield.log"
+  max_file_size: 10  # MB
+  backup_count: 5
+  log_emotions: true
+  log_alerts: true

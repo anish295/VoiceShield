@@ -1,0 +1,1270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VoiceShield - WORKING Flask Interface</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+            color: #e2e8f0;
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: rgba(20, 25, 40, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 2rem 0;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            position: relative;
+        }
+
+        .header-content {
+            display: flex;
+            align-items: center;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            gap: 1.5rem;
+        }
+
+        .header-text {
+            text-align: left;
+        }
+
+        .generals-section {
+            position: absolute;
+            bottom: 1rem;
+            right: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .generals-logo {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .generals-logo:hover {
+            transform: scale(1.1);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+
+        .generals-text {
+            font-size: 0.9rem;
+            color: #94a3b8;
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+
+        .generals-section:hover .generals-text {
+            color: #e2e8f0;
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid rgba(96, 165, 250, 0.3);
+            box-shadow: 0 4px 20px rgba(96, 165, 250, 0.2);
+            transition: all 0.3s ease;
+            flex-shrink: 0;
+        }
+
+        .logo:hover {
+            transform: scale(1.1);
+            border-color: rgba(96, 165, 250, 0.6);
+            box-shadow: 0 8px 30px rgba(96, 165, 250, 0.4);
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            color: #94a3b8;
+            font-weight: 500;
+        }
+
+        .working-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #48bb78, #38a169);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+            box-shadow: 0 2px 10px rgba(72, 187, 120, 0.3);
+        }
+        
+        .container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            max-width: 1400px;
+            margin: 2rem auto;
+            gap: 2rem;
+            padding: 0 2rem;
+        }
+
+        .video-section {
+            background: rgba(30, 35, 50, 0.95);
+            border-radius: 20px;
+            padding: 2rem;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .description-box {
+            background: rgba(20, 25, 40, 0.95);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-top: 2rem;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(96, 165, 250, 0.2);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .description-box h3 {
+            color: #60a5fa;
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            text-align: center;
+            background: linear-gradient(135deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .description-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+            padding: 0.75rem;
+            background: rgba(30, 35, 50, 0.5);
+            border-radius: 8px;
+            border-left: 3px solid #60a5fa;
+            transition: all 0.3s ease;
+        }
+
+        .description-item:hover {
+            background: rgba(30, 35, 50, 0.8);
+            transform: translateX(5px);
+        }
+
+        .description-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .description-title {
+            font-weight: 600;
+            color: #e2e8f0;
+            margin-right: 0.5rem;
+            min-width: fit-content;
+        }
+
+        .description-text {
+            color: #94a3b8;
+            line-height: 1.5;
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        #videoFeed {
+            width: 100%;
+            height: auto;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        #videoFeed:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+            border-color: rgba(96, 165, 250, 0.3);
+        }
+
+        .video-feed {
+            display: none;
+        }
+
+        .video-placeholder {
+            width: 100%;
+            height: 400px;
+            background: linear-gradient(135deg, #1e293b, #334155);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            border: 2px dashed rgba(255, 255, 255, 0.2);
+            color: #94a3b8;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .video-placeholder:hover {
+            border-color: #60a5fa;
+            background: linear-gradient(135deg, #334155, #475569);
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .btn {
+            padding: 0.875rem 2rem;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            min-width: 160px;
+        }
+
+        .btn-start {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            color: white;
+            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
+        }
+
+        .btn-start:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(59, 130, 246, 0.6);
+            background: linear-gradient(135deg, #2563eb, #7c3aed);
+        }
+
+        .btn-stop {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
+        }
+
+        .btn-stop:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(239, 68, 68, 0.6);
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .emotions-section {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .emotion-card {
+            background: rgba(30, 35, 50, 0.95);
+            border-radius: 16px;
+            padding: 1.5rem;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .emotion-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+            border-color: rgba(96, 165, 250, 0.2);
+        }
+
+        .emotion-card h3 {
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+            font-weight: 600;
+            text-align: center;
+            color: #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        
+        .emotion-display {
+            text-align: center;
+            padding: 1.25rem;
+            background: linear-gradient(135deg, #1e293b, #334155);
+            border-radius: 12px;
+            margin-bottom: 0.75rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .emotion-display:hover {
+            background: linear-gradient(135deg, #edf2f7, #e2e8f0);
+            transform: translateY(-1px);
+        }
+
+        .emotion-name {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            text-transform: capitalize;
+            color: #e2e8f0;
+            background: linear-gradient(135deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .emotion-confidence {
+            font-size: 0.9rem;
+            color: #94a3b8;
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+        }
+
+        .status-section {
+            background: rgba(30, 35, 50, 0.95);
+            border-radius: 16px;
+            padding: 1.5rem;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .status-section h3 {
+            margin-bottom: 1rem;
+            color: #e2e8f0;
+            font-weight: 600;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            font-weight: 500;
+            color: #cbd5e1;
+        }
+
+        .status-item:last-child {
+            border-bottom: none;
+        }
+
+        .status-item-right {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .status-active {
+            background: linear-gradient(135deg, #48bb78, #38a169);
+            box-shadow: 0 0 0 3px rgba(72, 187, 120, 0.2);
+            animation: pulse 2s infinite;
+        }
+
+        .status-inactive {
+            background: #cbd5e0;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 3px rgba(72, 187, 120, 0.2); }
+            50% { box-shadow: 0 0 0 6px rgba(72, 187, 120, 0.1); }
+            100% { box-shadow: 0 0 0 3px rgba(72, 187, 120, 0.2); }
+        }
+
+        .no-emotions {
+            text-align: center;
+            color: #64748b;
+            font-style: italic;
+            padding: 2rem 1rem;
+            font-size: 0.95rem;
+            background: linear-gradient(135deg, #1e293b, #334155);
+            border-radius: 12px;
+            border: 1px dashed rgba(255, 255, 255, 0.1);
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .container {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+
+            .header h1 {
+                font-size: 2.5rem;
+            }
+
+            .logo {
+                width: 70px;
+                height: 70px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 0 1rem;
+                margin: 1rem auto;
+            }
+
+            .header {
+                padding: 1.5rem 0;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .logo {
+                width: 60px;
+                height: 60px;
+            }
+
+            .header-content {
+                gap: 1rem;
+            }
+
+            .generals-section {
+                right: 1.5rem;
+                bottom: 0.75rem;
+            }
+
+            .generals-logo {
+                width: 35px;
+                height: 35px;
+            }
+
+            .generals-text {
+                font-size: 0.8rem;
+            }
+
+            .video-section, .emotion-card, .status-section {
+                padding: 1rem;
+            }
+
+            .description-box {
+                padding: 1rem;
+                margin-top: 1.5rem;
+            }
+
+            .description-item {
+                flex-direction: column;
+                padding: 0.5rem;
+            }
+
+            .description-title {
+                margin-bottom: 0.25rem;
+                margin-right: 0;
+            }
+
+            .controls {
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+
+            .btn {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 1.75rem;
+            }
+
+            .header p {
+                font-size: 1rem;
+            }
+
+            .logo {
+                width: 50px;
+                height: 50px;
+            }
+
+            .header-content {
+                gap: 0.75rem;
+                padding: 0 1rem;
+            }
+
+            .generals-section {
+                right: 1rem;
+                bottom: 0.5rem;
+                gap: 0.4rem;
+            }
+
+            .generals-logo {
+                width: 30px;
+                height: 30px;
+            }
+
+            .generals-text {
+                font-size: 0.75rem;
+            }
+
+            #videoPlaceholder {
+                height: 300px;
+                font-size: 1rem;
+            }
+        }
+
+        /* Smooth animations */
+        * {
+            transition: color 0.3s ease, background-color 0.3s ease;
+        }
+
+        /* Focus states for accessibility */
+        .btn:focus {
+            outline: 2px solid #60a5fa;
+            outline-offset: 2px;
+        }
+
+        /* Loading animation */
+        @keyframes shimmer {
+            0% { background-position: -200px 0; }
+            100% { background-position: calc(200px + 100%) 0; }
+        }
+
+        .loading {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200px 100%;
+            animation: shimmer 1.5s infinite;
+        }
+
+        /* Anger Alert Popup Styles */
+        .anger-alert-popup {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            max-width: 400px;
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            border: 2px solid #fca5a5;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(220, 38, 38, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1);
+            animation: slideInRight 0.5s ease-out, pulse-alert 2s infinite;
+            backdrop-filter: blur(10px);
+        }
+
+        .anger-alert-content {
+            padding: 0;
+        }
+
+        .anger-alert-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px 10px 0 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .anger-alert-icon {
+            font-size: 24px;
+            margin-right: 10px;
+            animation: shake 0.5s infinite;
+        }
+
+        .anger-alert-title {
+            font-weight: bold;
+            font-size: 18px;
+            color: #ffffff;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        .anger-alert-close {
+            background: none;
+            border: none;
+            color: #ffffff;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s;
+        }
+
+        .anger-alert-close:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .anger-alert-body {
+            padding: 16px 20px;
+            color: #ffffff;
+        }
+
+        .anger-alert-body p {
+            margin: 8px 0;
+            font-size: 14px;
+        }
+
+        .anger-alert-message {
+            font-weight: bold;
+            font-size: 16px !important;
+            margin-top: 12px !important;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes pulse-alert {
+            0%, 100% {
+                box-shadow: 0 20px 40px rgba(220, 38, 38, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1);
+            }
+            50% {
+                box-shadow: 0 20px 40px rgba(220, 38, 38, 0.5), 0 0 0 3px rgba(255, 255, 255, 0.2);
+            }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-2px); }
+            75% { transform: translateX(2px); }
+        }
+
+        /* Anger Configuration Section */
+        .anger-config-section {
+            background: linear-gradient(135deg, #1e293b, #334155);
+            border: 2px solid rgba(239, 68, 68, 0.3);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .anger-config-section h3 {
+            color: #ef4444;
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+            text-align: center;
+        }
+
+        .config-controls {
+            display: grid;
+            gap: 1rem;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .config-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .config-item label {
+            color: #e2e8f0;
+            font-weight: 500;
+            min-width: 150px;
+        }
+
+        .config-item input[type="range"] {
+            flex: 1;
+            height: 6px;
+            background: #475569;
+            border-radius: 3px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .config-item input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #ef4444;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3);
+        }
+
+        .config-item input[type="number"] {
+            width: 80px;
+            padding: 0.5rem;
+            background: #475569;
+            border: 1px solid #64748b;
+            border-radius: 6px;
+            color: #e2e8f0;
+            text-align: center;
+        }
+
+        .config-item input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            accent-color: #ef4444;
+        }
+
+        #thresholdValue {
+            color: #ef4444;
+            font-weight: bold;
+            min-width: 40px;
+            text-align: center;
+        }
+
+        .btn-config {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            margin-top: 1rem;
+            width: 100%;
+        }
+
+        .btn-config:hover {
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <img src="/static/Logo.jpg" alt="VoiceShield Logo" class="logo">
+            <div class="header-text">
+                <h1>VoiceShield</h1>
+                <p>Real-time Multimodal Emotion Detection System</p>
+            </div>
+        </div>
+        <div class="generals-section">
+            <img src="/static/Generals_logo.jpg" alt="The Generals Logo" class="generals-logo">
+            <span class="generals-text">The Generals</span>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="video-section">
+            <div class="video-container">
+                <img id="videoFeed" src="/video_feed" alt="Video Feed" class="video-feed">
+                <div id="videoPlaceholder" class="video-placeholder">
+                    Click Start
+                </div>
+            </div>
+            
+            <div class="controls">
+                <button id="startBtn" class="btn btn-start">Start WORKING System</button>
+                <button id="stopBtn" class="btn btn-stop" disabled>Stop System</button>
+            </div>
+
+            <!-- Anger Alert Configuration -->
+            <div class="anger-config-section">
+                <h3>⚠️ Anger Alert Configuration</h3>
+                <div class="config-controls">
+                    <div class="config-item">
+                        <label for="angerThreshold">Anger Threshold:</label>
+                        <input type="range" id="angerThreshold" min="0.1" max="1.0" step="0.1" value="0.6">
+                        <span id="thresholdValue">60%</span>
+                    </div>
+                    <div class="config-item">
+                        <label for="angerCooldown">Alert Cooldown (seconds):</label>
+                        <input type="number" id="angerCooldown" min="5" max="300" value="30">
+                    </div>
+                    <div class="config-item">
+                        <label for="angerEnabled">Enable Anger Alerts:</label>
+                        <input type="checkbox" id="angerEnabled" checked>
+                    </div>
+                    <button id="saveAngerConfig" class="btn btn-config">Save Configuration</button>
+                </div>
+            </div>
+
+            <div class="description-box">
+                <h3>🛡️ About VoiceShield</h3>
+                <div class="description-item">
+                    <span class="description-title">Real-Time Aggression Detection:</span>
+                    <span class="description-text">VoiceShield is an advanced system designed to identify signs of aggression and hostility in real time.</span>
+                </div>
+                <div class="description-item">
+                    <span class="description-title">Dual-Modal Analysis:</span>
+                    <span class="description-text">It uniquely combines two key data streams—vocal tone analysis and facial expression recognition—for a comprehensive assessment.</span>
+                </div>
+                <div class="description-item">
+                    <span class="description-title">Intelligent Monitoring:</span>
+                    <span class="description-text">The system actively analyzes audio and visual cues to detect early indicators of emotional stress, anger, and potential conflict.</span>
+                </div>
+                <div class="description-item">
+                    <span class="description-title">Instant Alert System:</span>
+                    <span class="description-text">Upon detecting a threat, it automatically triggers and sends immediate alerts to designated authorities, guardians, or security personnel.</span>
+                </div>
+                <div class="description-item">
+                    <span class="description-title">Enhanced Accuracy:</span>
+                    <span class="description-text">By fusing audio and visual data, VoiceShield achieves a higher degree of reliability and reduces false alarms compared to single-modal systems.</span>
+                </div>
+                <div class="description-item">
+                    <span class="description-title">Proactive Safety Solution:</span>
+                    <span class="description-text">Its primary goal is to enable timely intervention and prevent escalation, enhancing safety in schools, public spaces, smart homes, and more.</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="emotions-section">
+            <div class="emotion-card" style="grid-column: 1 / -1; background: linear-gradient(135deg, #1e293b, #334155); border: 2px solid rgba(96, 165, 250, 0.3);">
+                <h3 style="font-size: 1.4rem; color: #60a5fa;">🛡️ Overall Emotion Status</h3>
+                <div id="overallEmotions">
+                    <div class="no-emotions">System ready - show your face or speak!</div>
+                </div>
+            </div>
+
+            <div class="emotion-card">
+                <h3>👤 Facial Emotions</h3>
+                <div id="facialEmotions">
+                    <div class="no-emotions">Ready to detect facial emotions</div>
+                </div>
+            </div>
+
+            <div class="emotion-card">
+                <h3>🎤 Voice Emotions</h3>
+                <div id="voiceEmotions">
+                    <div class="no-emotions">Voice detection ready</div>
+                </div>
+            </div>
+            
+            <div class="status-section">
+                <h3>System Status</h3>
+                <div class="status-item">
+                    <span>Camera</span>
+                    <div class="status-item-right">
+                        <span id="cameraStatus">Inactive</span>
+                        <div id="cameraIndicator" class="status-indicator status-inactive"></div>
+                    </div>
+                </div>
+                <div class="status-item">
+                    <span>Face Detection</span>
+                    <div class="status-item-right">
+                        <span id="faceStatus">Not Ready</span>
+                        <div id="faceIndicator" class="status-indicator status-inactive"></div>
+                    </div>
+                </div>
+                <div class="status-item">
+                    <span>Microphone</span>
+                    <div class="status-item-right">
+                        <span id="audioStatus">Not Ready</span>
+                        <div id="audioIndicator" class="status-indicator status-inactive"></div>
+                    </div>
+                </div>
+                <div class="status-item">
+                    <span>System</span>
+                    <div class="status-item-right">
+                        <span id="systemStatus">Stopped</span>
+                        <div id="systemIndicator" class="status-indicator status-inactive"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Initialize Socket.IO connection
+        const socket = io();
+        
+        // DOM elements
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const videoFeed = document.getElementById('videoFeed');
+        const videoPlaceholder = document.getElementById('videoPlaceholder');
+        const facialEmotions = document.getElementById('facialEmotions');
+        const voiceEmotions = document.getElementById('voiceEmotions');
+        const overallEmotions = document.getElementById('overallEmotions');
+        
+        // Status elements
+        const cameraStatus = document.getElementById('cameraStatus');
+        const cameraIndicator = document.getElementById('cameraIndicator');
+        const faceStatus = document.getElementById('faceStatus');
+        const faceIndicator = document.getElementById('faceIndicator');
+        const audioStatus = document.getElementById('audioStatus');
+        const audioIndicator = document.getElementById('audioIndicator');
+        const systemStatus = document.getElementById('systemStatus');
+        const systemIndicator = document.getElementById('systemIndicator');
+        
+        // Event listeners
+        startBtn.addEventListener('click', startSystem);
+        stopBtn.addEventListener('click', stopSystem);
+
+        // Anger alert configuration elements
+        const angerThreshold = document.getElementById('angerThreshold');
+        const thresholdValue = document.getElementById('thresholdValue');
+        const angerCooldown = document.getElementById('angerCooldown');
+        const angerEnabled = document.getElementById('angerEnabled');
+        const saveAngerConfig = document.getElementById('saveAngerConfig');
+
+        // Update threshold display
+        angerThreshold.addEventListener('input', function() {
+            thresholdValue.textContent = Math.round(this.value * 100) + '%';
+        });
+
+        // Save anger configuration
+        saveAngerConfig.addEventListener('click', saveAngerConfiguration);
+
+        // Load initial anger configuration
+        loadAngerConfiguration();
+        
+        // Socket event listeners
+        socket.on('connect', function() {
+            console.log('Connected to WORKING VoiceShield server');
+            updateSystemStatus();
+        });
+        
+        socket.on('emotion_update', function(data) {
+            updateEmotions(data);
+        });
+
+        socket.on('anger_alert', function(data) {
+            showAngerAlert(data);
+        });
+        
+        // Functions
+        async function startSystem() {
+            try {
+                startBtn.disabled = true;
+                startBtn.textContent = 'Starting System...';
+
+                console.log('Starting VoiceShield system...');
+
+                const response = await fetch('/api/start', { method: 'POST' });
+                const result = await response.json();
+
+                if (result.success) {
+                    videoFeed.style.display = 'block';
+                    videoPlaceholder.style.display = 'none';
+                    stopBtn.disabled = false;
+                    startBtn.textContent = 'System Started';
+
+                    console.log('System started successfully!');
+                    if (result.audio_available) {
+                        console.log('Audio processing available');
+                    } else {
+                        console.log('Audio processing not available');
+                    }
+                    if (result.camera_available) {
+                        console.log('Camera available');
+                    }
+
+                    // Request permissions AFTER system starts (non-blocking)
+                    setTimeout(() => {
+                        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+                            .then(stream => {
+                                console.log('Permissions granted');
+                                stream.getTracks().forEach(track => track.stop());
+                            })
+                            .catch(error => {
+                                console.log('ℹPermissions will be requested when needed');
+                            });
+                    }, 1000);
+
+                    updateSystemStatus();
+                } else {
+                    console.error('System start failed:', result.error);
+                    alert('Failed to start system: ' + result.error);
+                    startBtn.disabled = false;
+                    startBtn.textContent = 'Start WORKING System';
+                }
+            } catch (error) {
+                console.error('Start system error:', error);
+                startBtn.disabled = false;
+                startBtn.textContent = 'Start WORKING System';
+            }
+        }
+        
+        async function stopSystem() {
+            try {
+                stopBtn.disabled = true;
+                stopBtn.textContent = 'Stopping...';
+                
+                const response = await fetch('/api/stop', { method: 'POST' });
+                const result = await response.json();
+                
+                if (result.success) {
+                    videoFeed.style.display = 'none';
+                    videoPlaceholder.style.display = 'flex';
+                    startBtn.disabled = false;
+                    startBtn.textContent = 'Start WORKING System';
+                    stopBtn.textContent = 'Stop System';
+                    
+                    // Clear emotions
+                    facialEmotions.innerHTML = '<div class="no-emotions">Ready to detect real facial emotions</div>';
+                    voiceEmotions.innerHTML = '<div class="no-emotions">Voice detection ready</div>';
+                    overallEmotions.innerHTML = '<div class="no-emotions">System ready - will actually work!</div>';
+                    
+                    updateSystemStatus();
+                } else {
+                    alert('Failed to stop system: ' + result.error);
+                    stopBtn.disabled = false;
+                    stopBtn.textContent = 'Stop System';
+                }
+            } catch (error) {
+                console.error('Stop system error:', error);
+                stopBtn.disabled = false;
+                stopBtn.textContent = 'Stop System';
+            }
+        }
+        
+        function updateEmotions(data) {
+            // Update facial emotions
+            if (data.facial && data.facial.length > 0) {
+                const facial = data.facial[0];
+                facialEmotions.innerHTML = `
+                    <div class="emotion-display">
+                        <div class="emotion-name">${facial.emotion}</div>
+                        <div class="emotion-confidence">Confidence: ${(facial.confidence * 100).toFixed(1)}%</div>
+                    </div>
+                `;
+            } else {
+                facialEmotions.innerHTML = '<div class="no-emotions">Looking for faces to detect...</div>';
+            }
+            
+            // Update voice emotions (only if real audio is detected)
+            if (data.voice && data.voice.length > 0 && data.voice[0].source === 'real_audio') {
+                const voice = data.voice[0];
+
+                // Show all emotion scores for debugging
+                let scoresHtml = '';
+                if (voice.all_scores) {
+                    const sortedScores = Object.entries(voice.all_scores)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 3);  // Top 3 emotions
+
+                    scoresHtml = sortedScores.map(([emotion, score]) =>
+                        `<small>${emotion}: ${(score * 100).toFixed(0)}%</small>`
+                    ).join(' | ');
+                }
+
+                voiceEmotions.innerHTML = `
+                    <div class="emotion-display">
+                        <div class="emotion-name">${voice.emotion}</div>
+                        <div class="emotion-confidence">Confidence: ${(voice.confidence * 100).toFixed(1)}%</div>
+                        <div class="emotion-confidence">Energy: ${voice.audio_energy.toFixed(4)}</div>
+                        <div class="emotion-confidence" style="font-size: 0.8em; margin-top: 5px;">${scoresHtml}</div>
+                    </div>
+                `;
+            } else {
+                voiceEmotions.innerHTML = '<div class="no-emotions">Speak into microphone...</div>';
+            }
+            
+            // Update overall emotion (single combined result)
+            if (data.overall && data.overall.emotion) {
+                const overall = data.overall;
+                const sourceText = {
+                    'facial_primary': '👤 Face Priority',
+                    'facial_voice_combined': '👤🎤 Combined',
+                    'voice_primary': '🎤 Voice Priority',
+                    'facial_weak': '👤 Face Only',
+                    'default': '😐 Default',
+                    'error': '⚠️ Error'
+                };
+
+                overallEmotions.innerHTML = `
+                    <div class="emotion-display">
+                        <div class="emotion-name">${overall.emotion}</div>
+                        <div class="emotion-confidence">Confidence: ${(overall.confidence * 100).toFixed(1)}%</div>
+                        <div class="emotion-confidence">Source: ${sourceText[overall.source] || overall.source}</div>
+                    </div>
+                `;
+            } else {
+                overallEmotions.innerHTML = '<div class="no-emotions">Show your face or speak - system will detect emotions!</div>';
+            }
+        }
+
+        function showAngerAlert(data) {
+            // Create alert popup
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'anger-alert-popup';
+            alertDiv.innerHTML = `
+                <div class="anger-alert-content">
+                    <div class="anger-alert-header">
+                        <span class="anger-alert-icon">⚠️</span>
+                        <span class="anger-alert-title">ANGER DETECTED</span>
+                        <button class="anger-alert-close" onclick="this.parentElement.parentElement.parentElement.remove()">×</button>
+                    </div>
+                    <div class="anger-alert-body">
+                        <p><strong>Anger Level:</strong> ${data.anger_percentage.toFixed(1)}%</p>
+                        <p><strong>Time:</strong> ${new Date(data.timestamp * 1000).toLocaleTimeString()}</p>
+                        <p class="anger-alert-message">${data.message}</p>
+                    </div>
+                </div>
+            `;
+
+            // Add to page
+            document.body.appendChild(alertDiv);
+
+            // Auto-remove after 10 seconds
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 10000);
+
+            // Log to console
+            console.warn('ANGER ALERT:', data);
+
+            // Play alert sound (optional)
+            try {
+                const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT');
+                audio.play().catch(() => {}); // Ignore errors if audio fails
+            } catch (e) {
+                // Ignore audio errors
+            }
+        }
+
+        async function loadAngerConfiguration() {
+            try {
+                const response = await fetch('/api/anger_alert/config');
+                const config = await response.json();
+
+                angerThreshold.value = config.threshold;
+                thresholdValue.textContent = Math.round(config.threshold * 100) + '%';
+                angerCooldown.value = config.cooldown;
+                angerEnabled.checked = config.enabled;
+            } catch (error) {
+                console.error('Failed to load anger configuration:', error);
+            }
+        }
+
+        async function saveAngerConfiguration() {
+            try {
+                const config = {
+                    threshold: parseFloat(angerThreshold.value),
+                    cooldown: parseInt(angerCooldown.value),
+                    enabled: angerEnabled.checked
+                };
+
+                const response = await fetch('/api/anger_alert/config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(config)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Show success message
+                    const originalText = saveAngerConfig.textContent;
+                    saveAngerConfig.textContent = 'Saved!';
+                    saveAngerConfig.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+
+                    setTimeout(() => {
+                        saveAngerConfig.textContent = originalText;
+                        saveAngerConfig.style.background = '';
+                    }, 2000);
+                } else {
+                    alert('Failed to save configuration: ' + (result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Failed to save anger configuration:', error);
+                alert('Failed to save configuration: ' + error.message);
+            }
+        }
+
+        async function updateSystemStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const status = await response.json();
+                
+                // Update camera status
+                if (status.camera_active) {
+                    cameraStatus.textContent = 'Active';
+                    cameraIndicator.className = 'status-indicator status-active';
+                } else {
+                    cameraStatus.textContent = 'Inactive';
+                    cameraIndicator.className = 'status-indicator status-inactive';
+                }
+                
+                // Update face detection status
+                if (status.face_detection_ready) {
+                    faceStatus.textContent = 'Ready';
+                    faceIndicator.className = 'status-indicator status-active';
+                } else {
+                    faceStatus.textContent = 'Not Ready';
+                    faceIndicator.className = 'status-indicator status-inactive';
+                }
+
+                // Update audio status
+                if (status.audio_active) {
+                    audioStatus.textContent = 'Active';
+                    audioIndicator.className = 'status-indicator status-active';
+                } else {
+                    audioStatus.textContent = 'Inactive';
+                    audioIndicator.className = 'status-indicator status-inactive';
+                }
+
+                // Update system status
+                if (status.system_running) {
+                    systemStatus.textContent = 'WORKING!';
+                    systemIndicator.className = 'status-indicator status-active';
+                } else {
+                    systemStatus.textContent = 'Stopped';
+                    systemIndicator.className = 'status-indicator status-inactive';
+                }
+                
+            } catch (error) {
+                console.error('Status update error:', error);
+            }
+        }
+        
+        // Update status every 3 seconds
+        setInterval(updateSystemStatus, 3000);
+    </script>
+</body>
+</html>

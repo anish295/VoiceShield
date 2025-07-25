@@ -1,0 +1,18 @@
+# Core Dependencies for VoiceShield Flask Application
+# Computer Vision and Face Detection
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# Facial Emotion Recognition
+deepface>=0.0.79
+tensorflow>=2.13.0
+tf-keras>=2.13.0
+
+# Voice Emotion Recognition (Audio Processing)
+librosa>=0.10.0
+pyaudio>=0.2.11
+scipy>=1.11.0
+
+# Web Framework
+flask>=2.3.0
+flask-socketio>=5.3.0
