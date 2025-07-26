@@ -996,7 +996,7 @@
         const testBtn = document.getElementById('testBtn');
         testBtn.addEventListener('click', function() {
             console.log('🧪 Test button clicked - requesting test emotions');
-            fetch('/api/test_emotions')
+            fetch(`${API_URL}/api/test_emotions`)
                 .then(response => response.json())
                 .then(data => {
                     console.log('🧪 Test emotions response:', data);
