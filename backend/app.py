@@ -536,7 +536,16 @@ def detect_voice_emotions(audio_data=None):
         score_difference = max_score - second_score
         if score_difference < 0.15:
             # If scores are close, stick with previous emotion for stability
-            emotion = system_state.last_voice_emotion
+            previous_emotion_state = system_state.last_voice_emotion
+
+            # FIX: Defensively extract the string, in case the state is a dict
+            if isinstance(previous_emotion_state, dict):
+                emotion = previous_emotion_state.get('emotion', 'neutral')
+            elif previous_emotion_state:
+                emotion = previous_emotion_state
+            else:
+                emotion = 'neutral'  # Fallback if no previous state
+
             confidence = min(0.7, 0.3 + (score_difference * 0.5))
         else:
             # Clear winner - use new emotion
