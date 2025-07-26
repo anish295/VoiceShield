@@ -523,8 +523,13 @@ def detect_voice_emotions(audio_data=None):
             emotion_scores['neutral'] += 0.2
 
         # Add stability factor - reduce rapid switching
-        if system_state.last_voice_emotion in emotion_scores:
-            emotion_scores[system_state.last_voice_emotion] += 0.1  # Small bonus for consistency
+        # Defensive handling: extract emotion string if it's a dict
+        last_emotion = system_state.last_voice_emotion
+        if isinstance(last_emotion, dict):
+            last_emotion = last_emotion.get('emotion', 'neutral')
+
+        if last_emotion and last_emotion in emotion_scores:
+            emotion_scores[last_emotion] += 0.1  # Small bonus for consistency
 
         # Find dominant emotion with stability and better confidence calculation
         sorted_emotions = sorted(emotion_scores.items(), key=lambda x: x[1], reverse=True)
@@ -832,36 +837,49 @@ def test_emotions():
     test_data = {
         'facial': [
             {
-                'emotion': 'happy',
-                'confidence': 0.85,
+                'emotion': 'TEST_FACIAL_EMOTION',
+                'confidence': 0.99,
                 'region': {'x': 100, 'y': 100, 'w': 150, 'h': 150}
             }
         ],
         'voice': [
             {
-                'emotion': 'excited',
-                'confidence': 0.75,
-                'source': 'real_audio',
-                'audio_energy': 0.8,
+                'emotion': 'TEST_VOICE_EMOTION',
+                'confidence': 0.88,
+                'source': 'test_audio',
+                'audio_energy': 0.9,
                 'all_scores': {
-                    'excited': 0.75,
+                    'TEST_VOICE_EMOTION': 0.88,
                     'happy': 0.65,
                     'neutral': 0.35
                 }
             }
         ],
         'overall': {
-            'emotion': 'happy',
-            'confidence': 0.8,
-            'source': 'facial_voice_combined'
+            'emotion': 'TEST_OVERALL_EMOTION',
+            'confidence': 0.95,
+            'source': 'test_combined'
         },
         'timestamp': time.time()
     }
 
-    # Emit to all connected clients
-    socketio.emit('emotion_update', test_data)
+    # Check connected clients
+    try:
+        connected_clients = len(socketio.server.manager.rooms.get('/', {}).keys()) if hasattr(socketio.server, 'manager') else 0
+        logger.info(f"🔍 Connected Socket.IO clients: {connected_clients}")
+    except:
+        connected_clients = "unknown"
 
-    return jsonify({'status': 'Test emotions sent', 'data': test_data})
+    # Emit to all connected clients
+    logger.info(f"📤 EMITTING TEST EMOTIONS: {test_data}")
+    socketio.emit('emotion_update', test_data)
+    logger.info(f"✅ Test emotions emitted successfully")
+
+    return jsonify({
+        'status': 'Test emotions sent',
+        'data': test_data,
+        'connected_clients': connected_clients
+    })
 
 @app.route('/test')
 def test_page():
@@ -1093,7 +1111,12 @@ def handle_audio_chunk(data):
             current_emotions['timestamp'] = time.time()
 
             # Store the latest voice emotion for combination with facial emotions
-            system_state.last_voice_emotion = voice_emotions[0] if voice_emotions else None
+            if voice_emotions:
+                system_state.last_voice_emotion = voice_emotions[0]['emotion']  # Extract emotion string
+                system_state.last_voice_confidence = voice_emotions[0]['confidence']
+            else:
+                system_state.last_voice_emotion = None
+                system_state.last_voice_confidence = 0.0
 
             logger.debug(f"🎤 Voice emotion processed: {voice_emotions[0]['emotion'] if voice_emotions else 'none'}")
 
