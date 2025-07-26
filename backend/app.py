@@ -41,8 +41,6 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 camera = None
 is_running = False
 face_cascade = None
-audio_stream = None
-audio_thread = None
 current_emotions = {
     'facial': [],
     'voice': [],
@@ -431,31 +429,36 @@ def detect_faces_and_emotions(frame):
         logger.error(f"Face detection error: {e}")
         return []
 
-def detect_voice_emotions():
-    """Real voice emotion detection - only returns results if actual audio is detected."""
+def detect_voice_emotions(audio_data=None):
+    """Voice emotion detection from client-sent audio data."""
     try:
-        # Check if we have real audio data
-        if not hasattr(detect_voice_emotions, 'audio_buffer') or not detect_voice_emotions.audio_buffer:
-            logger.debug("No audio buffer available")
-            return []  # No audio data available
+        # Use provided audio data or check buffer for backward compatibility
+        if audio_data is not None:
+            combined_audio = np.array(audio_data, dtype=np.float32)
+        else:
+            # Check if we have buffered audio data (fallback)
+            if not hasattr(detect_voice_emotions, 'audio_buffer') or not detect_voice_emotions.audio_buffer:
+                logger.debug("No audio data available")
+                return []
 
-        # Get recent audio data
-        recent_audio = detect_voice_emotions.audio_buffer[-20:] if len(detect_voice_emotions.audio_buffer) >= 20 else []
+            # Get recent audio data from buffer
+            recent_audio = detect_voice_emotions.audio_buffer[-20:] if len(detect_voice_emotions.audio_buffer) >= 20 else []
 
-        if not recent_audio:
-            logger.debug(f"Not enough audio data: {len(detect_voice_emotions.audio_buffer)} chunks")
-            return []  # Not enough audio data
+            if not recent_audio:
+                logger.debug(f"Not enough audio data: {len(detect_voice_emotions.audio_buffer)} chunks")
+                return []
 
-        # Combine audio data
-        combined_audio = []
-        for audio_chunk in recent_audio:
-            combined_audio.extend(audio_chunk)
+            # Combine audio data
+            combined_audio = []
+            for audio_chunk in recent_audio:
+                combined_audio.extend(audio_chunk)
 
-        combined_audio = np.array(combined_audio, dtype=np.float32)
+            combined_audio = np.array(combined_audio, dtype=np.float32)
 
         # Check if there's actual audio (not silence)
         audio_energy = np.mean(np.abs(combined_audio))
-        logger.debug(f"Audio energy: {audio_energy:.6f}, buffer size: {len(detect_voice_emotions.audio_buffer)}")
+        buffer_size = len(detect_voice_emotions.audio_buffer) if hasattr(detect_voice_emotions, 'audio_buffer') else 0
+        logger.debug(f"Audio energy: {audio_energy:.6f}, buffer size: {buffer_size}")
 
         if audio_energy < 0.002:  # Lower threshold for quieter speech
             logger.debug("Audio too quiet to analyze")
@@ -681,90 +684,11 @@ def calculate_energy_variation(audio_data):
     except Exception:
         return 0.02  # Default neutral value
 
-def initialize_audio():
-    """Initialize real audio capture."""
-    global audio_stream
-    try:
-        import pyaudio
+# Audio initialization removed - now handled by frontend
 
-        # Audio parameters
-        CHUNK = 1024
-        FORMAT = pyaudio.paInt16
-        CHANNELS = 1
-        RATE = 16000
+# Audio processing thread removed - now handled by frontend
 
-        # Initialize PyAudio
-        p = pyaudio.PyAudio()
-
-        # Open audio stream
-        stream = p.open(
-            format=FORMAT,
-            channels=CHANNELS,
-            rate=RATE,
-            input=True,
-            frames_per_buffer=CHUNK
-        )
-
-        audio_stream = {
-            'stream': stream,
-            'chunk': CHUNK,
-            'rate': RATE,
-            'pyaudio': p,
-            'active': True
-        }
-
-        logger.info("Real audio initialized: 16kHz, 1 channel")
-        return True
-
-    except ImportError:
-        logger.warning("PyAudio not available - running without audio processing")
-        return False
-    except Exception as e:
-        logger.warning(f"Audio initialization failed: {e} - running without audio")
-        return False
-
-def audio_processing_thread():
-    """Real audio processing thread."""
-    global audio_stream
-
-    while is_running and audio_stream and audio_stream.get('active'):
-        try:
-            stream = audio_stream['stream']
-            chunk = audio_stream['chunk']
-
-            if stream.is_active():
-                # Read real audio data
-                data = stream.read(chunk, exception_on_overflow=False)
-                audio_data = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
-
-                # Add to buffer
-                detect_voice_emotions.audio_buffer.append(audio_data)
-
-                # Keep only last 3 seconds of audio
-                max_chunks = int(3 * audio_stream['rate'] / chunk)  # 3 seconds
-                if len(detect_voice_emotions.audio_buffer) > max_chunks:
-                    detect_voice_emotions.audio_buffer.pop(0)
-
-            time.sleep(0.02)  # 50 FPS audio processing
-
-        except Exception as e:
-            logger.warning(f"Audio processing error: {e}")
-            time.sleep(0.1)
-
-def cleanup_audio():
-    """Clean up audio resources."""
-    global audio_stream
-    if audio_stream:
-        try:
-            audio_stream['active'] = False
-            audio_stream['stream'].stop_stream()
-            audio_stream['stream'].close()
-            audio_stream['pyaudio'].terminate()
-            audio_stream = None
-            detect_voice_emotions.audio_buffer = []
-            logger.info("Audio resources cleaned up")
-        except Exception as e:
-            logger.warning(f"Audio cleanup error: {e}")
+# Audio cleanup removed - now handled by frontend
 
 # Load configuration
 def load_config():
@@ -873,7 +797,7 @@ def get_status():
         'status': 'healthy',
         'camera_active': system_state.camera_active,
         'face_detection_ready': face_cascade is not None,
-        'audio_active': audio_stream is not None and audio_stream.get('active', False),
+        'audio_active': False,  # Audio now handled by frontend
         'system_running': is_running,
         'timestamp': float(time.time()),
         'anger_alert': {
@@ -977,24 +901,16 @@ def start_system():
         # Camera is now handled by client - just mark as ready
         system_state.set_camera_active(True)
 
-        # Initialize audio (optional - system works without it)
-        audio_success = initialize_audio()
-        if not audio_success:
-            logger.warning("Audio initialization failed - continuing without voice detection")
+        # Audio processing now handled by frontend
+        logger.info("Audio processing will be handled by frontend via Socket.IO")
 
         is_running = True
-
-        # Start audio processing thread if audio is available
-        if audio_stream and audio_stream.get('active'):
-            audio_thread = threading.Thread(target=audio_processing_thread, daemon=True)
-            audio_thread.start()
-            logger.info("Audio processing thread started")
 
         logger.info("VoiceShield backend system started successfully")
         return jsonify({
             'success': True,
             'message': 'System started successfully',
-            'audio_available': audio_stream is not None,
+            'audio_available': True,  # Audio handled by frontend
             'camera_available': True
         })
 
@@ -1010,7 +926,7 @@ def stop_system():
     try:
         is_running = False
         system_state.set_camera_active(False)
-        cleanup_audio()
+        # Audio cleanup now handled by frontend
 
         # Clear emotions
         current_emotions = {'facial': [], 'voice': [], 'overall': []}
@@ -1100,8 +1016,8 @@ def handle_process_frame(data):
         # Process the frame for emotion detection
         facial_emotions = detect_faces_and_emotions(frame)
 
-        # Get voice emotions (if available)
-        voice_emotions = detect_voice_emotions() if audio_stream and audio_stream.get('active') else []
+        # Get voice emotions (now handled by frontend via Socket.IO)
+        voice_emotions = detect_voice_emotions()
 
         # Get current voice emotion for combination
         current_voice_emotion = None
@@ -1143,6 +1059,37 @@ def handle_process_frame(data):
 
     except Exception as e:
         logger.error(f"Frame processing error: {e}")
+
+@socketio.on('audio_chunk')
+def handle_audio_chunk(data):
+    """Handle audio chunk from client."""
+    try:
+        if not is_running:
+            return
+
+        # Get the audio data from client
+        audio_data = data.get('audio_data')
+        if not audio_data:
+            return
+
+        # Convert to numpy array (audio_data should be a list of float values)
+        audio_array = np.array(audio_data, dtype=np.float32)
+
+        # Process voice emotions with the received audio data
+        voice_emotions = detect_voice_emotions(audio_array)
+
+        # Update current emotions with voice data
+        if voice_emotions:
+            current_emotions['voice'] = voice_emotions
+            current_emotions['timestamp'] = time.time()
+
+            # Store the latest voice emotion for combination with facial emotions
+            system_state.last_voice_emotion = voice_emotions[0] if voice_emotions else None
+
+            logger.debug(f"🎤 Voice emotion processed: {voice_emotions[0]['emotion'] if voice_emotions else 'none'}")
+
+    except Exception as e:
+        logger.error(f"Audio processing error: {e}")
 
 if __name__ == '__main__':
     import os

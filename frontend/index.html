@@ -1097,6 +1097,81 @@
             showAngerAlert(data);
         });
         
+        // Audio processing variables
+        let audioContext = null;
+        let audioSource = null;
+        let audioProcessor = null;
+
+        // Audio processing functions
+        async function initializeAudioProcessing(stream) {
+            try {
+                console.log('🎤 Initializing audio processing...');
+
+                // Create audio context
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+                // Create audio source from stream
+                audioSource = audioContext.createMediaStreamSource(stream);
+
+                // Create script processor for audio chunks
+                const bufferSize = 4096; // Buffer size for audio processing
+                audioProcessor = audioContext.createScriptProcessor(bufferSize, 1, 1);
+
+                // Process audio chunks
+                audioProcessor.onaudioprocess = function(event) {
+                    const inputBuffer = event.inputBuffer;
+                    const inputData = inputBuffer.getChannelData(0); // Get mono audio data
+
+                    // Convert to array and send to backend
+                    const audioArray = Array.from(inputData);
+
+                    // Only send if there's actual audio (not silence)
+                    const audioEnergy = audioArray.reduce((sum, sample) => sum + Math.abs(sample), 0) / audioArray.length;
+
+                    if (audioEnergy > 0.001) { // Threshold for silence detection
+                        if (typeof socket.emit === 'function') {
+                            socket.emit('audio_chunk', {
+                                audio_data: audioArray,
+                                timestamp: Date.now(),
+                                sample_rate: audioContext.sampleRate
+                            });
+                        }
+                    }
+                };
+
+                // Connect audio nodes
+                audioSource.connect(audioProcessor);
+                audioProcessor.connect(audioContext.destination);
+
+                console.log('✅ Audio processing initialized successfully');
+                console.log(`🎤 Sample rate: ${audioContext.sampleRate}Hz, Buffer size: ${bufferSize}`);
+
+            } catch (error) {
+                console.error('❌ Audio processing initialization failed:', error);
+                alert('Audio processing failed: ' + error.message);
+            }
+        }
+
+        function stopAudioProcessing() {
+            try {
+                if (audioProcessor) {
+                    audioProcessor.disconnect();
+                    audioProcessor = null;
+                }
+                if (audioSource) {
+                    audioSource.disconnect();
+                    audioSource = null;
+                }
+                if (audioContext && audioContext.state !== 'closed') {
+                    audioContext.close();
+                    audioContext = null;
+                }
+                console.log('🎤 Audio processing stopped');
+            } catch (error) {
+                console.error('❌ Error stopping audio processing:', error);
+            }
+        }
+
         // Functions
         async function startSystem() {
             try {
@@ -1127,6 +1202,9 @@
                         videoFeed.srcObject = videoStream;
                         videoFeed.style.display = 'block';
                         videoPlaceholder.style.display = 'none';
+
+                        // Initialize audio processing
+                        await initializeAudioProcessing(videoStream);
 
                         // Start sending frames to the backend (10 FPS)
                         frameSenderInterval = setInterval(() => {
@@ -1195,6 +1273,9 @@
                     clearInterval(frameSenderInterval);
                     frameSenderInterval = null;
                 }
+
+                // Stop audio processing
+                stopAudioProcessing();
 
                 // Stop the camera stream
                 if (videoStream) {
