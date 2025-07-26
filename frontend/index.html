@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VoiceShield - WORKING Flask Interface</title>
+    <title>VoiceShield - WORKING Flask Interface v2.1 FIXED</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <style>
         * {
@@ -798,6 +798,7 @@
         <div class="video-section">
             <div class="video-container">
                 <video id="videoFeed" autoplay muted playsinline class="video-feed"></video>
+                <img id="processedFrame" class="processed-frame" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;">
                 <div id="videoPlaceholder" class="video-placeholder">
                     Click Start to access camera
                 </div>
@@ -950,10 +951,20 @@
         console.log('Attempting to connect to:', API_URL);
         const socket = io(API_URL);
 
+        // Socket.IO connection success handling
+        socket.on('connect', function() {
+            console.log('🔌 ✅ Socket.IO connected successfully!');
+        });
+
         // Socket.IO connection error handling
         socket.on('connect_error', function(error) {
-            console.error('Socket.IO connection error:', error);
+            console.error('🔌 ❌ Socket.IO connection error:', error);
             alert('Could not connect to backend server. Please check your network or backend status.');
+        });
+
+        // Socket.IO disconnection handling
+        socket.on('disconnect', function() {
+            console.log('🔌 ❌ Socket.IO disconnected!');
         });
 
         // DOM elements
@@ -1031,7 +1042,8 @@
         });
         
         socket.on('emotion_update', function(data) {
-            console.log('🎭 RECEIVED EMOTION UPDATE:', data);
+            console.log('🎭 ✅ RECEIVED EMOTION UPDATE EVENT! (FIXED VERSION v2.1)');
+            console.log('🎭 EMOTION DATA:', data);
             console.log('📊 Data structure check:', {
                 hasData: !!data,
                 hasFacial: !!data.facial,
@@ -1041,6 +1053,22 @@
                 hasOverall: !!data.overall,
                 timestamp: data.timestamp
             });
+
+            // VOICE DEBUGGING
+            if (data.voice && data.voice.length > 0) {
+                console.log('🎤 VOICE DATA FOUND:', data.voice[0]);
+                console.log('🎤 Voice source check:', data.voice[0].source);
+                console.log('🎤 Voice source === real_audio?', data.voice[0].source === 'real_audio');
+            } else {
+                console.log('🎤 NO VOICE DATA');
+            }
+
+            // OVERALL DEBUGGING
+            if (data.overall && data.overall.emotion) {
+                console.log('🎯 OVERALL DATA FOUND:', data.overall);
+            } else {
+                console.log('🎯 NO OVERALL DATA');
+            }
 
             // Enhanced debugging for facial data
             if (data.facial && data.facial.length > 0) {
@@ -1090,6 +1118,23 @@
             } catch (error) {
                 console.error('❌ Error in updateEmotions():', error);
                 console.error('Stack trace:', error.stack);
+            }
+        });
+
+        // Listen for processed frames with bounding boxes
+        socket.on('processed_frame', function(data) {
+            if (data.frame) {
+                const processedImg = document.getElementById('processedFrame');
+                const videoFeed = document.getElementById('videoFeed');
+
+                if (processedImg && videoFeed) {
+                    // Show processed frame with bounding boxes
+                    processedImg.src = 'data:image/jpeg;base64,' + data.frame;
+                    processedImg.style.display = 'block';
+
+                    // Hide the raw video feed to show processed frame
+                    videoFeed.style.opacity = '0.3';
+                }
             }
         });
 
@@ -1400,7 +1445,7 @@
                 const emotionHtml = `
                     <div class="emotion-display" style="background: #ff6b6b; color: white; padding: 15px; border-radius: 8px; margin: 10px 0;">
                         <div class="emotion-name" style="font-size: 24px; font-weight: bold;">${facial.emotion.toUpperCase()}</div>
-                        <div class="emotion-confidence" style="font-size: 16px;">Confidence: ${(facial.confidence * 100).toFixed(1)}%</div>
+                        <div class="emotion-confidence" style="font-size: 16px;">Confidence: ${((facial.confidence || 0) * 100).toFixed(1)}%</div>
                         <div style="font-size: 12px; margin-top: 5px;">Updated: ${new Date().toLocaleTimeString()}</div>
                     </div>
                 `;
@@ -1428,13 +1473,20 @@
             }
 
             // Update voice emotions (only if real audio is detected)
+            console.log('🎤 VOICE UPDATE SECTION - Checking conditions...');
+            console.log('🎤 data.voice exists?', !!data.voice);
+            console.log('🎤 data.voice.length > 0?', data.voice && data.voice.length > 0);
+            console.log('🎤 source check:', data.voice && data.voice[0] ? data.voice[0].source : 'no voice data');
+
             if (data.voice && data.voice.length > 0 && data.voice[0].source === 'real_audio') {
+                console.log('🎤 ✅ VOICE CONDITIONS MET - UPDATING DISPLAY');
                 const voice = data.voice[0];
 
                 // Show all emotion scores for debugging
                 let scoresHtml = '';
                 if (voice.all_scores) {
                     const sortedScores = Object.entries(voice.all_scores)
+                        .filter(([emotion, score]) => score !== undefined && score !== null)  // Filter out undefined scores
                         .sort((a, b) => b[1] - a[1])
                         .slice(0, 3);  // Top 3 emotions
 
@@ -1445,20 +1497,27 @@
 
                 voiceEmotions.innerHTML = `
                     <div class="emotion-display">
-                        <div class="emotion-name">${voice.emotion}</div>
-                        <div class="emotion-confidence">Confidence: ${(voice.confidence * 100).toFixed(1)}%</div>
-                        <div class="emotion-confidence">Energy: ${voice.audio_energy.toFixed(4)}</div>
+                        <div class="emotion-name">${voice.emotion || 'Unknown'}</div>
+                        <div class="emotion-confidence">Confidence: ${((voice.confidence || 0) * 100).toFixed(1)}%</div>
+                        <div class="emotion-confidence">Energy: ${voice.audio_energy ? voice.audio_energy.toFixed(4) : '0.0000'}</div>
                         <div class="emotion-confidence" style="font-size: 0.8em; margin-top: 5px;">${scoresHtml}</div>
                     </div>
                 `;
-                console.log('🎤 Voice emotion updated:', voice.emotion);
+                console.log('🎤 ✅ Voice emotion updated:', voice.emotion);
             } else {
+                console.log('🎤 ❌ VOICE CONDITIONS NOT MET - Setting default message');
                 voiceEmotions.innerHTML = '<div class="no-emotions">Speak into microphone...</div>';
                 console.log('🎤 No voice emotions detected');
             }
 
             // Update overall emotion (single combined result)
+            console.log('🎯 OVERALL UPDATE SECTION - Checking conditions...');
+            console.log('🎯 data.overall exists?', !!data.overall);
+            console.log('🎯 data.overall.emotion exists?', data.overall && data.overall.emotion);
+            console.log('🎯 overall data:', data.overall);
+
             if (data.overall && data.overall.emotion) {
+                console.log('🎯 ✅ OVERALL CONDITIONS MET - UPDATING DISPLAY');
                 const overall = data.overall;
                 const sourceText = {
                     'facial_primary': '👤 Face Priority',
@@ -1471,13 +1530,14 @@
 
                 overallEmotions.innerHTML = `
                     <div class="emotion-display">
-                        <div class="emotion-name">${overall.emotion}</div>
-                        <div class="emotion-confidence">Confidence: ${(overall.confidence * 100).toFixed(1)}%</div>
-                        <div class="emotion-confidence">Source: ${sourceText[overall.source] || overall.source}</div>
+                        <div class="emotion-name">${overall.emotion || 'Unknown'}</div>
+                        <div class="emotion-confidence">Confidence: ${((overall.confidence || 0) * 100).toFixed(1)}%</div>
+                        <div class="emotion-confidence">Source: ${sourceText[overall.source] || overall.source || 'Unknown'}</div>
                     </div>
                 `;
-                console.log('🎯 Overall emotion updated:', overall.emotion, overall.confidence);
+                console.log('🎯 ✅ Overall emotion updated:', overall.emotion, overall.confidence);
             } else {
+                console.log('🎯 ❌ OVERALL CONDITIONS NOT MET - Setting default message');
                 overallEmotions.innerHTML = '<div class="no-emotions">Show your face or speak - system will detect emotions!</div>';
                 console.log('🎯 No overall emotions detected');
             }

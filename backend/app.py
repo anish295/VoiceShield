@@ -84,6 +84,12 @@ class SystemState:
         self.camera_active = False
         self.last_voice_emotion = 'neutral'
         self.last_voice_confidence = 0.5
+        self.last_facial_emotion = 'neutral'
+        self.last_facial_confidence = 0.5
+        self.facial_emotion_history = []  # Store last 5 emotions for smoothing
+        self.audio_active = False
+        self.last_audio_chunk_time = 0
+        self.voice_detection_active = False  # Track if voice is actually being detected
 
     def set_camera_active(self, active):
         """Set camera active state."""
@@ -252,6 +258,64 @@ def apply_anger_bias_correction(emotions):
         logger.warning(f"Anger bias correction failed: {e}")
         return emotions
 
+def smooth_facial_emotion(new_emotion, new_confidence):
+    """Smooth facial emotions to prevent rapid changes."""
+    try:
+        # Add to history
+        system_state.facial_emotion_history.append({
+            'emotion': new_emotion,
+            'confidence': new_confidence,
+            'timestamp': time.time()
+        })
+
+        # Keep only last 5 emotions
+        if len(system_state.facial_emotion_history) > 5:
+            system_state.facial_emotion_history = system_state.facial_emotion_history[-5:]
+
+        # If we don't have enough history, use current emotion
+        if len(system_state.facial_emotion_history) < 2:
+            return new_emotion, new_confidence
+
+        # Check for consistency in last 2 emotions (less strict for better responsiveness)
+        recent_emotions = system_state.facial_emotion_history[-2:]
+        emotion_counts = {}
+        total_confidence = 0
+
+        for emotion_data in recent_emotions:
+            emotion = emotion_data['emotion']
+            confidence = emotion_data['confidence']
+
+            if emotion not in emotion_counts:
+                emotion_counts[emotion] = {'count': 0, 'total_confidence': 0}
+
+            emotion_counts[emotion]['count'] += 1
+            emotion_counts[emotion]['total_confidence'] += confidence
+            total_confidence += confidence
+
+        # Find most frequent emotion
+        most_frequent = max(emotion_counts.items(), key=lambda x: x[1]['count'])
+        most_frequent_emotion = most_frequent[0]
+        most_frequent_count = most_frequent[1]['count']
+
+        # If emotion appears in both recent frames, use it
+        if most_frequent_count >= 2:
+            avg_confidence = most_frequent[1]['total_confidence'] / most_frequent_count
+            return most_frequent_emotion, min(avg_confidence, 0.95)  # Higher confidence cap
+
+        # If new emotion has high confidence, allow it through
+        if new_confidence >= 0.6:
+            return new_emotion, new_confidence
+
+        # Otherwise, use previous stable emotion if confidence is low
+        if new_confidence < 0.5 and system_state.last_facial_emotion:
+            return system_state.last_facial_emotion, system_state.last_facial_confidence * 0.95
+
+        return new_emotion, new_confidence
+
+    except Exception as e:
+        logger.error(f"Facial emotion smoothing error: {e}")
+        return new_emotion, new_confidence
+
 def combine_emotions_with_facial_priority(facial_emotions, voice_emotion):
     """
     Combine facial and voice emotions with facial emotion taking priority.
@@ -318,7 +382,7 @@ def detect_faces_and_emotions(frame):
     """Actually detect faces and analyze emotions."""
     try:
         if face_cascade is None:
-            return []
+            return [], frame
         
         # Convert to grayscale for face detection
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -342,62 +406,44 @@ def detect_faces_and_emotions(frame):
                 continue
             
             try:
-                # Try to use DeepFace for real emotion detection with enhanced preprocessing
+                # Use DeepFace for accurate emotion detection with simplified approach
                 from deepface import DeepFace
 
-                # Enhanced preprocessing for better angry emotion detection
-                face_processed = enhance_face_for_emotion_detection(face_roi)
+                # Simple preprocessing for better accuracy
+                face_resized = cv2.resize(face_roi, (224, 224))  # Standard size for better accuracy
 
-                # Analyze emotion with multiple approaches for better accuracy
-                emotion_results = []
+                # Single, accurate emotion analysis
+                result = DeepFace.analyze(
+                    face_resized,
+                    actions=['emotion'],
+                    enforce_detection=False,
+                    silent=True,
+                    detector_backend='opencv'
+                )
 
-                # Approach 1: Standard preprocessing
-                try:
-                    result1 = DeepFace.analyze(
-                        face_processed,
-                        actions=['emotion'],
-                        enforce_detection=False,
-                        silent=True,
-                        detector_backend='opencv'
-                    )
-                    if isinstance(result1, list):
-                        result1 = result1[0]
-                    emotion_results.append(result1.get('emotion', {}))
-                except:
-                    pass
+                if isinstance(result, list):
+                    result = result[0]
 
-                # Approach 2: Enhanced contrast for angry detection
-                try:
-                    face_contrast = enhance_contrast_for_anger(face_roi)
-                    result2 = DeepFace.analyze(
-                        face_contrast,
-                        actions=['emotion'],
-                        enforce_detection=False,
-                        silent=True,
-                        detector_backend='opencv'
-                    )
-                    if isinstance(result2, list):
-                        result2 = result2[0]
-                    emotion_results.append(result2.get('emotion', {}))
-                except:
-                    pass
+                emotion_scores = result.get('emotion', {})
 
-                # Combine results with anger-specific weighting
-                if emotion_results:
-                    combined_emotions = combine_emotion_results_with_anger_boost(emotion_results)
+                if emotion_scores:
+                    # Get the dominant emotion
+                    dominant_emotion = max(emotion_scores.items(), key=lambda x: x[1])
+                    emotion_name = dominant_emotion[0].lower()
+                    confidence = float(dominant_emotion[1] / 100.0)
 
-                    if combined_emotions:
-                        # Get dominant emotion with anger bias correction
-                        corrected_emotions = apply_anger_bias_correction(combined_emotions)
-                        dominant_emotion = max(corrected_emotions.items(), key=lambda x: x[1])
+                    # Apply confidence threshold for accuracy
+                    if confidence < 0.4:  # If confidence is too low, default to neutral
+                        emotion_name = 'neutral'
+                        confidence = 0.5
 
-                        emotions.append({
-                            'emotion': dominant_emotion[0].lower(),
-                            'confidence': float(dominant_emotion[1] / 100.0),
-                            'bbox': (int(x), int(y), int(w), int(h)),
-                            'timestamp': float(time.time()),
-                            'all_emotions': {k.lower(): float(v/100.0) for k, v in corrected_emotions.items()}
-                        })
+                    emotions.append({
+                        'emotion': emotion_name,
+                        'confidence': confidence,
+                        'bbox': (int(x), int(y), int(w), int(h)),
+                        'timestamp': float(time.time()),
+                        'all_emotions': {k.lower(): float(v/100.0) for k, v in emotion_scores.items()}
+                    })
                     
             except Exception as deepface_error:
                 # Fallback to simple emotion based on face size and position
@@ -422,12 +468,33 @@ def detect_faces_and_emotions(frame):
                     'bbox': (int(x), int(y), int(w), int(h)),
                     'timestamp': float(time.time())
                 })
-        
-        return emotions
-        
+
+        # Draw bounding boxes and emotion labels on the frame
+        for emotion_data in emotions:
+            x, y, w, h = emotion_data['bbox']
+            emotion = emotion_data['emotion']
+            confidence = emotion_data['confidence']
+
+            # Draw rectangle around face
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+            # Draw emotion label with confidence
+            label = f"{emotion}: {confidence:.1%}"
+            label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]
+
+            # Draw background rectangle for text
+            cv2.rectangle(frame, (x, y - label_size[1] - 10),
+                         (x + label_size[0], y), (0, 255, 0), -1)
+
+            # Draw text
+            cv2.putText(frame, label, (x, y - 5),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
+
+        return emotions, frame
+
     except Exception as e:
         logger.error(f"Face detection error: {e}")
-        return []
+        return [], frame
 
 def detect_voice_emotions(audio_data=None):
     """Voice emotion detection from client-sent audio data."""
@@ -458,69 +525,95 @@ def detect_voice_emotions(audio_data=None):
         # Check if there's actual audio (not silence)
         audio_energy = np.mean(np.abs(combined_audio))
         buffer_size = len(detect_voice_emotions.audio_buffer) if hasattr(detect_voice_emotions, 'audio_buffer') else 0
-        logger.debug(f"Audio energy: {audio_energy:.6f}, buffer size: {buffer_size}")
 
-        if audio_energy < 0.002:  # Lower threshold for quieter speech
-            logger.debug("Audio too quiet to analyze")
+        # Enhanced debugging for voice emotion detection
+        if not hasattr(detect_voice_emotions, 'debug_count'):
+            detect_voice_emotions.debug_count = 0
+        detect_voice_emotions.debug_count += 1
+
+        if detect_voice_emotions.debug_count <= 10:
+            logger.info(f"🎤 VOICE DEBUG #{detect_voice_emotions.debug_count}: Audio energy: {audio_energy:.6f}, samples: {len(combined_audio)}, buffer size: {buffer_size}")
+
+        # Balanced threshold for normal speech
+        if audio_energy < 0.003:  # Lowered from 0.02 to 0.003 for normal speech detection
+            if detect_voice_emotions.debug_count <= 5:
+                logger.info(f"🎤 Audio too quiet to analyze (energy: {audio_energy:.6f} < 0.003)")
+            system_state.voice_detection_active = False  # No voice detected
             return []
 
         # Enhanced audio feature extraction for better emotion detection
         rms = np.sqrt(np.mean(combined_audio**2))
         zero_crossings = np.sum(np.diff(np.sign(combined_audio)) != 0)
 
+        # Additional silence detection using RMS
+        if rms < 0.015:  # Lowered RMS threshold for normal speech
+            if detect_voice_emotions.debug_count <= 5:
+                logger.info(f"🎤 RMS too low for speech (rms: {rms:.6f} < 0.015)")
+            system_state.voice_detection_active = False  # No voice detected
+            return []
+
+        # Check for speech-like patterns using zero crossings
+        # Speech typically has 200-2000 zero crossings per second
+        expected_crossings = len(combined_audio) * 0.03  # Lowered minimum for normal speech
+        if zero_crossings < expected_crossings:
+            if detect_voice_emotions.debug_count <= 5:
+                logger.info(f"🎤 Not enough zero crossings for speech ({zero_crossings} < {expected_crossings:.0f})")
+            system_state.voice_detection_active = False  # No voice detected
+            return []
+
         # Additional features for better emotion classification
         spectral_centroid = calculate_spectral_centroid(combined_audio)
         pitch_variation = calculate_pitch_variation(combined_audio)
         energy_variation = calculate_energy_variation(combined_audio)
 
-        # Balanced voice emotion classification - FIXED oscillation between angry/surprised
+        # Balanced voice emotion classification - REDUCED NEUTRAL BIAS
         emotion_scores = {
-            'neutral': 0.2,  # Moderate base neutral score
+            'neutral': 0.1,  # Reduced neutral bias to allow other emotions
             'happy': 0.0,
             'sad': 0.0,
             'angry': 0.0,
             'surprised': 0.0
         }
 
-        # Happy indicators: Bright, energetic, positive patterns
-        if rms > 0.06 and spectral_centroid > 1000 and energy_variation > 0.02:
+        # Happy indicators: Bright, energetic, positive patterns (LOWERED THRESHOLDS)
+        if rms > 0.08 and spectral_centroid > 800 and energy_variation > 0.02:
             emotion_scores['happy'] += 0.5
-        if zero_crossings > 900 and pitch_variation > 0.1 and spectral_centroid > 800:
+        if zero_crossings > 400 and pitch_variation > 0.1 and spectral_centroid > 600:
             emotion_scores['happy'] += 0.4
-        if rms > 0.08 and spectral_centroid > 1100:  # High energy + bright
+        if rms > 0.10 and spectral_centroid > 900:  # High energy + bright
             emotion_scores['happy'] += 0.3
 
-        # Angry indicators: High energy + LOW pitch (key distinction from surprised)
-        if rms > 0.12 and spectral_centroid < 700:  # High energy + LOW pitch
+        # Angry indicators: High energy + LOW pitch (LOWERED THRESHOLDS)
+        if rms > 0.15 and spectral_centroid < 600:  # High energy + LOW pitch
             emotion_scores['angry'] += 0.6
-        if energy_variation > 0.06 and spectral_centroid < 800 and zero_crossings > 1000:
+        if energy_variation > 0.04 and spectral_centroid < 700 and zero_crossings > 300:
             emotion_scores['angry'] += 0.5
-        if rms > 0.18 and spectral_centroid < 600:  # Very aggressive pattern
+        if rms > 0.20 and spectral_centroid < 500:  # Very aggressive pattern
             emotion_scores['angry'] += 0.4
 
-        # Surprised indicators: HIGH pitch + sudden changes (key distinction from angry)
-        if spectral_centroid > 1400 and energy_variation > 0.1:  # HIGH pitch + changes
+        # Surprised indicators: HIGH pitch + sudden changes (LOWERED THRESHOLDS)
+        if spectral_centroid > 1000 and energy_variation > 0.08:  # HIGH pitch + changes
             emotion_scores['surprised'] += 0.6
-        if spectral_centroid > 1500 and zero_crossings > 1300:  # Very high pitch
+        if spectral_centroid > 1200 and zero_crossings > 500:  # Very high pitch
             emotion_scores['surprised'] += 0.5
-        if energy_variation > 0.15 and spectral_centroid > 1200:  # Sudden + high pitch
+        if energy_variation > 0.10 and spectral_centroid > 900:  # Sudden + high pitch
             emotion_scores['surprised'] += 0.4
 
-        # Sad indicators: Low energy, monotone, low pitch
-        if rms < 0.04 and spectral_centroid < 500 and energy_variation < 0.02:
+        # Sad indicators: Low energy, monotone, low pitch (ADJUSTED THRESHOLDS)
+        if rms < 0.08 and spectral_centroid < 500 and energy_variation < 0.03:
             emotion_scores['sad'] += 0.5
-        if energy_variation < 0.015 and pitch_variation < 0.06:  # Very monotone
+        if energy_variation < 0.02 and pitch_variation < 0.06:  # Very monotone
             emotion_scores['sad'] += 0.4
         if rms < 0.025 and zero_crossings < 500:  # Very low energy
             emotion_scores['sad'] += 0.3
 
-        # Neutral gets bonuses for normal speech patterns
-        if 0.05 <= rms <= 0.11 and 650 <= spectral_centroid <= 1100:
-            emotion_scores['neutral'] += 0.4
-        if 0.02 <= energy_variation <= 0.05:  # Normal variation
-            emotion_scores['neutral'] += 0.3
-        if 600 <= zero_crossings <= 1100:  # Normal speech pattern
-            emotion_scores['neutral'] += 0.2
+        # Neutral gets REDUCED bonuses for normal speech patterns
+        if 0.06 <= rms <= 0.12 and 650 <= spectral_centroid <= 1100:
+            emotion_scores['neutral'] += 0.2  # Reduced from 0.4
+        if 0.03 <= energy_variation <= 0.05:  # Normal variation
+            emotion_scores['neutral'] += 0.15  # Reduced from 0.3
+        if 400 <= zero_crossings <= 800:  # Normal speech pattern
+            emotion_scores['neutral'] += 0.1  # Reduced from 0.2
 
         # Add stability factor - reduce rapid switching
         # Defensive handling: extract emotion string if it's a dict
@@ -569,9 +662,15 @@ def detect_voice_emotions(audio_data=None):
         # Store for next iteration
         system_state.last_voice_emotion = emotion
         system_state.last_voice_confidence = confidence
+        system_state.voice_detection_active = True  # Voice successfully detected
 
-        logger.debug(f"Voice emotion detected: {emotion} ({confidence:.2f})")
-        return [{
+        # Enhanced debugging for voice emotion results
+        if detect_voice_emotions.debug_count <= 10:
+            logger.info(f"🎤 VOICE EMOTION DETECTED: {emotion} (confidence: {confidence:.2f})")
+            logger.info(f"🎤 Audio features: energy={audio_energy:.6f}, rms={rms:.4f}, zero_crossings={zero_crossings}")
+            logger.info(f"🎤 Emotion scores: {emotion_scores}")
+
+        result = [{
             'emotion': emotion,
             'confidence': float(confidence),
             'timestamp': float(time.time()),
@@ -584,6 +683,11 @@ def detect_voice_emotions(audio_data=None):
             'all_scores': {k: float(v) for k, v in emotion_scores.items()},
             'source': 'real_audio'
         }]
+
+        if detect_voice_emotions.debug_count <= 5:
+            logger.info(f"🎤 RETURNING VOICE RESULT: {result}")
+
+        return result
 
     except Exception as e:
         logger.error(f"Voice emotion detection error: {e}")
@@ -811,7 +915,7 @@ def get_status():
         'status': 'healthy',
         'camera_active': system_state.camera_active,
         'face_detection_ready': face_cascade is not None,
-        'audio_active': False,  # Audio now handled by frontend
+        'audio_active': system_state.audio_active and (time.time() - system_state.last_audio_chunk_time < 5),  # Active if received audio in last 5 seconds
         'system_running': is_running,
         'timestamp': float(time.time()),
         'anger_alert': {
@@ -1027,13 +1131,27 @@ def handle_disconnect():
 def handle_process_frame(data):
     """Handle frame processing from client."""
     try:
+        # Debug logging for frame reception
+        if not hasattr(handle_process_frame, 'frame_count'):
+            handle_process_frame.frame_count = 0
+        handle_process_frame.frame_count += 1
+
+        if handle_process_frame.frame_count <= 3:
+            logger.info(f"📹 FRAME #{handle_process_frame.frame_count} RECEIVED from client")
+
         if not is_running:
+            if handle_process_frame.frame_count <= 3:
+                logger.info(f"📹 Frame received but system not running (is_running={is_running})")
             return
 
         # Get the Base64 image data
         base64_image = data.get('image')
         if not base64_image:
+            logger.warning("📹 Frame received but no image data")
             return
+
+        if handle_process_frame.frame_count <= 3:
+            logger.info(f"📹 Processing frame with image data length: {len(base64_image)}")
 
         # Decode the Base64 image
         frame = decode_base64_image(base64_image)
@@ -1041,14 +1159,43 @@ def handle_process_frame(data):
             return
 
         # Process the frame for emotion detection
-        facial_emotions = detect_faces_and_emotions(frame)
+        facial_emotions, processed_frame = detect_faces_and_emotions(frame)
 
-        # Get voice emotions (now handled by frontend via Socket.IO)
-        voice_emotions = detect_voice_emotions()
+        if handle_process_frame.frame_count <= 5:
+            logger.info(f"📹 Face detection result: {len(facial_emotions) if facial_emotions else 0} faces found")
+
+        # Apply facial emotion smoothing to prevent rapid changes
+        if facial_emotions:
+            primary_emotion = facial_emotions[0]
+            smoothed_emotion, smoothed_confidence = smooth_facial_emotion(
+                primary_emotion['emotion'],
+                primary_emotion['confidence']
+            )
+
+            # Update the primary emotion with smoothed values
+            facial_emotions[0]['emotion'] = smoothed_emotion
+            facial_emotions[0]['confidence'] = smoothed_confidence
+
+            # Update system state
+            system_state.last_facial_emotion = smoothed_emotion
+            system_state.last_facial_confidence = smoothed_confidence
+
+        # Get voice emotions from recent audio processing
+        # Voice emotions are processed separately via audio chunks
+        voice_emotions = []
+        if (system_state.voice_detection_active and
+            system_state.last_voice_emotion and
+            system_state.last_voice_confidence > 0):
+            voice_emotions = [{
+                'emotion': system_state.last_voice_emotion,
+                'confidence': system_state.last_voice_confidence,
+                'timestamp': float(time.time()),
+                'source': 'real_audio'  # Frontend expects 'real_audio' source
+            }]
 
         # Get current voice emotion for combination
         current_voice_emotion = None
-        if system_state.last_voice_emotion:
+        if system_state.voice_detection_active and system_state.last_voice_emotion:
             current_voice_emotion = {
                 'emotion': system_state.last_voice_emotion,
                 'confidence': system_state.last_voice_confidence
@@ -1066,8 +1213,13 @@ def handle_process_frame(data):
         # Check for anger alert
         check_anger_alert(facial_emotions)
 
+        # Encode processed frame and send back to client
+        _, buffer = cv2.imencode('.jpg', processed_frame)
+        processed_frame_b64 = base64.b64encode(buffer).decode('utf-8')
+
         # Emit results back to client
         emit('emotion_update', current_emotions)
+        emit('processed_frame', {'frame': processed_frame_b64})
 
         # Enhanced debugging
         print(f"📸 Frame processed: {len(facial_emotions)} faces, overall: {overall_emotion.get('emotion', 'none')}")
@@ -1109,6 +1261,10 @@ def handle_audio_chunk(data):
         if handle_audio_chunk.chunk_count <= 3:
             logger.info(f"🎤 AUDIO CHUNK #{handle_audio_chunk.chunk_count} RECEIVED: {len(audio_data)} samples, sample_rate: {data.get('sample_rate', 'unknown')}")
 
+        # Update audio activity tracking
+        system_state.audio_active = True
+        system_state.last_audio_chunk_time = time.time()
+
         # Convert to numpy array (audio_data should be a list of float values)
         audio_array = np.array(audio_data, dtype=np.float32)
 
@@ -1121,15 +1277,34 @@ def handle_audio_chunk(data):
             current_emotions['timestamp'] = time.time()
 
             # Store the latest voice emotion for combination with facial emotions
-            if voice_emotions:
-                system_state.last_voice_emotion = voice_emotions[0]['emotion']  # Extract emotion string
-                system_state.last_voice_confidence = voice_emotions[0]['confidence']
-            else:
-                system_state.last_voice_emotion = None
-                system_state.last_voice_confidence = 0.0
+            system_state.last_voice_emotion = voice_emotions[0]['emotion']  # Extract emotion string
+            system_state.last_voice_confidence = voice_emotions[0]['confidence']
 
             if handle_audio_chunk.chunk_count <= 5:
-                logger.info(f"🎤 Voice emotion processed: {voice_emotions[0]['emotion'] if voice_emotions else 'none'}")
+                logger.info(f"🎤 Voice emotion processed: {voice_emotions[0]['emotion']}")
+
+            # 🎯 NEW: Send immediate update to frontend when voice emotion is detected
+            # Get the last known facial emotion from the state
+            facial_data_for_update = []
+            if system_state.last_facial_emotion:
+                facial_data_for_update.append({
+                    'emotion': system_state.last_facial_emotion,
+                    'confidence': system_state.last_facial_confidence
+                })
+
+            # Combine with the NEW voice emotion to get a NEW overall emotion
+            overall_emotion = combine_emotions_with_facial_priority(facial_data_for_update, voice_emotions[0])
+
+            # Build the complete payload and emit immediately
+            update_payload = {
+                'facial': facial_data_for_update,
+                'voice': voice_emotions,
+                'overall': overall_emotion,
+                'timestamp': time.time()
+            }
+
+            logger.info(f"🎤 ✅ SENDING VOICE-TRIGGERED UPDATE: voice={voice_emotions[0]['emotion']}, overall={overall_emotion['emotion'] if overall_emotion else 'none'}")
+            emit('emotion_update', update_payload)
 
     except Exception as e:
         logger.error(f"❌ Audio processing error: {e}")
