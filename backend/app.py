@@ -1092,12 +1092,22 @@ def handle_audio_chunk(data):
     """Handle audio chunk from client."""
     try:
         if not is_running:
+            logger.debug("🎤 Audio chunk received but system not running")
             return
 
         # Get the audio data from client
         audio_data = data.get('audio_data')
         if not audio_data:
+            logger.debug("🎤 Audio chunk received but no audio_data")
             return
+
+        # Debug logging for first few chunks
+        if not hasattr(handle_audio_chunk, 'chunk_count'):
+            handle_audio_chunk.chunk_count = 0
+        handle_audio_chunk.chunk_count += 1
+
+        if handle_audio_chunk.chunk_count <= 3:
+            logger.info(f"🎤 AUDIO CHUNK #{handle_audio_chunk.chunk_count} RECEIVED: {len(audio_data)} samples, sample_rate: {data.get('sample_rate', 'unknown')}")
 
         # Convert to numpy array (audio_data should be a list of float values)
         audio_array = np.array(audio_data, dtype=np.float32)
@@ -1118,10 +1128,11 @@ def handle_audio_chunk(data):
                 system_state.last_voice_emotion = None
                 system_state.last_voice_confidence = 0.0
 
-            logger.debug(f"🎤 Voice emotion processed: {voice_emotions[0]['emotion'] if voice_emotions else 'none'}")
+            if handle_audio_chunk.chunk_count <= 5:
+                logger.info(f"🎤 Voice emotion processed: {voice_emotions[0]['emotion'] if voice_emotions else 'none'}")
 
     except Exception as e:
-        logger.error(f"Audio processing error: {e}")
+        logger.error(f"❌ Audio processing error: {e}")
 
 if __name__ == '__main__':
     import os

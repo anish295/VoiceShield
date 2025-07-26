@@ -1107,35 +1107,71 @@
             try {
                 console.log('🎤 Initializing audio processing...');
 
+                // Check if stream has audio tracks
+                const audioTracks = stream.getAudioTracks();
+                console.log('🎤 Audio tracks found:', audioTracks.length);
+                if (audioTracks.length === 0) {
+                    throw new Error('No audio tracks found in stream');
+                }
+
                 // Create audio context
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                console.log('🎤 AudioContext created, state:', audioContext.state);
+
+                // Resume audio context if suspended (required by modern browsers)
+                if (audioContext.state === 'suspended') {
+                    await audioContext.resume();
+                    console.log('🎤 AudioContext resumed, new state:', audioContext.state);
+                }
 
                 // Create audio source from stream
                 audioSource = audioContext.createMediaStreamSource(stream);
+                console.log('🎤 Audio source created');
 
                 // Create script processor for audio chunks
                 const bufferSize = 4096; // Buffer size for audio processing
                 audioProcessor = audioContext.createScriptProcessor(bufferSize, 1, 1);
+                console.log('🎤 Script processor created with buffer size:', bufferSize);
 
                 // Process audio chunks
+                let audioChunkCount = 0;
                 audioProcessor.onaudioprocess = function(event) {
-                    const inputBuffer = event.inputBuffer;
-                    const inputData = inputBuffer.getChannelData(0); // Get mono audio data
+                    try {
+                        const inputBuffer = event.inputBuffer;
+                        const inputData = inputBuffer.getChannelData(0); // Get mono audio data
 
-                    // Convert to array and send to backend
-                    const audioArray = Array.from(inputData);
+                        // Convert to array and send to backend
+                        const audioArray = Array.from(inputData);
 
-                    // Only send if there's actual audio (not silence)
-                    const audioEnergy = audioArray.reduce((sum, sample) => sum + Math.abs(sample), 0) / audioArray.length;
+                        // Calculate audio energy
+                        const audioEnergy = audioArray.reduce((sum, sample) => sum + Math.abs(sample), 0) / audioArray.length;
 
-                    if (audioEnergy > 0.001) { // Threshold for silence detection
-                        if (typeof socket.emit === 'function') {
-                            socket.emit('audio_chunk', {
-                                audio_data: audioArray,
-                                timestamp: Date.now(),
-                                sample_rate: audioContext.sampleRate
-                            });
+                        // Debug logging (only for first few chunks)
+                        audioChunkCount++;
+                        if (audioChunkCount <= 5) {
+                            console.log(`🎤 Audio chunk ${audioChunkCount}: energy=${audioEnergy.toFixed(6)}, samples=${audioArray.length}`);
                         }
+
+                        // Only send if there's actual audio (not silence)
+                        if (audioEnergy > 0.001) { // Threshold for silence detection
+                            if (typeof socket.emit === 'function') {
+                                socket.emit('audio_chunk', {
+                                    audio_data: audioArray,
+                                    timestamp: Date.now(),
+                                    sample_rate: audioContext.sampleRate
+                                });
+
+                                if (audioChunkCount <= 3) {
+                                    console.log('🎤 ✅ Audio chunk sent to backend via Socket.IO');
+                                }
+                            } else {
+                                console.error('🎤 ❌ Socket.IO not available for audio transmission');
+                            }
+                        } else if (audioChunkCount <= 10) {
+                            console.log('🎤 ⚪ Audio chunk below threshold (silence)');
+                        }
+                    } catch (error) {
+                        console.error('🎤 ❌ Error processing audio chunk:', error);
                     }
                 };
 
